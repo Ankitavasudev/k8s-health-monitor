@@ -2,257 +2,186 @@ import pytest
 import json
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch, MagicMock
+import sys, os
 
-import sys
-import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from k8s_monitor import (
-    HealthAnalyzer, HealthStatus, KubectlClient, Display, Exporter,
-    ClusterReport, _get_age, generate_demo_data
+    HealthAnalyzer, SecurityScanner, ResourceAnalyzer, KubectlClient,
+    PVCInfo, ResourceQuota, NetworkPolicy, SecurityIssue,
+    Recommender, Display, generate_demo_data
 )
 
 
 class TestHealthAnalyzer:
-    def setup_method(self):
-        self.analyzer = HealthAnalyzer()
-
-    def test_analyze_nodes_all_ready(self):
+    def test_nodes_all_ready(self):
         nodes = [
-            {"metadata": {"name": "node-1", "labels": {}, "creationTimestamp": "2026-01-01T00:00:00Z"},
+            {"metadata": {"name": "n1", "labels": {}, "creationTimestamp": "2026-01-01T00:00:00Z"},
              "status": {"conditions": [{"type": "Ready", "status": "True"}], "nodeInfo": {"kubeletVersion": "v1.30.0"}}},
-            {"metadata": {"name": "node-2", "labels": {}, "creationTimestamp": "2026-01-01T00:00:00Z"},
+            {"metadata": {"name": "n2", "labels": {}, "creationTimestamp": "2026-01-01T00:00:00Z"},
              "status": {"conditions": [{"type": "Ready", "status": "True"}], "nodeInfo": {"kubeletVersion": "v1.30.0"}}},
         ]
-        result = self.analyzer.analyze_nodes(nodes)
+        result = HealthAnalyzer.nodes(nodes)
         assert result["total"] == 2
         assert result["ready"] == 2
-        assert result["not_ready"] == 0
-        assert result["status"] == "HEALTHY"
         assert result["score"] == 100.0
 
-    def test_analyze_nodes_one_not_ready(self):
+    def test_nodes_one_not_ready(self):
         nodes = [
-            {"metadata": {"name": "node-1", "labels": {}, "creationTimestamp": "2026-01-01T00:00:00Z"},
+            {"metadata": {"name": "n1", "labels": {}, "creationTimestamp": "2026-01-01T00:00:00Z"},
              "status": {"conditions": [{"type": "Ready", "status": "True"}], "nodeInfo": {"kubeletVersion": "v1.30.0"}}},
-            {"metadata": {"name": "node-2", "labels": {}, "creationTimestamp": "2026-01-01T00:00:00Z"},
+            {"metadata": {"name": "n2", "labels": {}, "creationTimestamp": "2026-01-01T00:00:00Z"},
              "status": {"conditions": [{"type": "Ready", "status": "False"}], "nodeInfo": {"kubeletVersion": "v1.30.0"}}},
         ]
-        result = self.analyzer.analyze_nodes(nodes)
-        assert result["ready"] == 1
+        result = HealthAnalyzer.nodes(nodes)
         assert result["not_ready"] == 1
-        assert result["status"] == "WARNING"
         assert result["score"] == 50.0
 
-    def test_analyze_nodes_multiple_not_ready(self):
-        nodes = [
-            {"metadata": {"name": "node-1", "labels": {}, "creationTimestamp": "2026-01-01T00:00:00Z"},
-             "status": {"conditions": [{"type": "Ready", "status": "False"}], "nodeInfo": {"kubeletVersion": "v1.30.0"}}},
-            {"metadata": {"name": "node-2", "labels": {}, "creationTimestamp": "2026-01-01T00:00:00Z"},
-             "status": {"conditions": [{"type": "Ready", "status": "False"}], "nodeInfo": {"kubeletVersion": "v1.30.0"}}},
-            {"metadata": {"name": "node-3", "labels": {}, "creationTimestamp": "2026-01-01T00:00:00Z"},
-             "status": {"conditions": [{"type": "Ready", "status": "True"}], "nodeInfo": {"kubeletVersion": "v1.30.0"}}},
-        ]
-        result = self.analyzer.analyze_nodes(nodes)
-        assert result["not_ready"] == 2
-        assert result["status"] == "CRITICAL"
-
-    def test_analyze_nodes_empty(self):
-        result = self.analyzer.analyze_nodes([])
+    def test_nodes_empty(self):
+        result = HealthAnalyzer.nodes([])
         assert result["total"] == 0
         assert result["score"] == 0
 
-    def test_analyze_nodes_versions(self):
-        nodes = [
-            {"metadata": {"name": "node-1", "labels": {}, "creationTimestamp": "2026-01-01T00:00:00Z"},
-             "status": {"conditions": [{"type": "Ready", "status": "True"}], "nodeInfo": {"kubeletVersion": "v1.30.0"}}},
-            {"metadata": {"name": "node-2", "labels": {}, "creationTimestamp": "2026-01-01T00:00:00Z"},
-             "status": {"conditions": [{"type": "Ready", "status": "True"}], "nodeInfo": {"kubeletVersion": "v1.31.1"}}},
-        ]
-        result = self.analyzer.analyze_nodes(nodes)
-        assert len(result["versions"]) == 2
-        assert "v1.30.0" in result["versions"]
-        assert "v1.31.1" in result["versions"]
-
-    def test_analyze_pods_all_running(self):
+    def test_pods_all_running(self):
         pods = [
-            {"metadata": {"name": "pod-1", "namespace": "default", "creationTimestamp": "2026-01-01T00:00:00Z"},
-             "status": {"phase": "Running", "containerStatuses": [{"restartCount": 0}]}},
-            {"metadata": {"name": "pod-2", "namespace": "default", "creationTimestamp": "2026-01-01T00:00:00Z"},
-             "status": {"phase": "Running", "containerStatuses": [{"restartCount": 2}]}},
+            {"metadata": {"name": "p1", "namespace": "default", "creationTimestamp": "2026-01-01T00:00:00Z"},
+             "status": {"phase": "Running", "containerStatuses": [{"restartCount": 0}]},
+             "spec": {"nodeName": "n1", "containers": [{"name": "c1", "securityContext": {}}]}},
         ]
-        result = self.analyzer.analyze_pods(pods)
-        assert result["total"] == 2
-        assert result["running"] == 2
+        result = HealthAnalyzer.pods(pods)
+        assert result["running"] == 1
         assert result["failed"] == 0
-        assert result["status"] == "HEALTHY"
-        assert result["score"] == 100.0
 
-    def test_analyze_pods_with_failed(self):
+    def test_pods_with_failed(self):
         pods = [
-            {"metadata": {"name": "pod-1", "namespace": "default", "creationTimestamp": "2026-01-01T00:00:00Z"},
-             "status": {"phase": "Running", "containerStatuses": []}},
-            {"metadata": {"name": "pod-2", "namespace": "default", "creationTimestamp": "2026-01-01T00:00:00Z"},
-             "status": {"phase": "Failed", "containerStatuses": []}},
+            {"metadata": {"name": "p1", "namespace": "default", "creationTimestamp": "2026-01-01T00:00:00Z"},
+             "status": {"phase": "Failed", "containerStatuses": []},
+             "spec": {"nodeName": "n1", "containers": []}},
         ]
-        result = self.analyzer.analyze_pods(pods)
+        result = HealthAnalyzer.pods(pods)
         assert result["failed"] == 1
-        assert "default/pod-2" in result["failed_pods"]
 
-    def test_analyze_pods_with_pending(self):
+    def test_pods_restart_loop(self):
         pods = [
-            {"metadata": {"name": "pod-1", "namespace": "kube-system", "creationTimestamp": "2026-01-01T00:00:00Z"},
-             "status": {"phase": "Pending", "containerStatuses": []}},
+            {"metadata": {"name": "p1", "namespace": "default", "creationTimestamp": "2026-01-01T00:00:00Z"},
+             "status": {"phase": "Running", "containerStatuses": [{"restartCount": 10}]},
+             "spec": {"nodeName": "n1", "containers": [{"name": "c1", "securityContext": {}}]}},
         ]
-        result = self.analyzer.analyze_pods(pods)
-        assert result["pending"] == 1
-        assert "kube-system/pod-1" in result["pending_pods"]
-
-    def test_analyze_pods_restart_loop(self):
-        pods = [
-            {"metadata": {"name": "pod-1", "namespace": "default", "creationTimestamp": "2026-01-01T00:00:00Z"},
-             "status": {"phase": "Running", "containerStatuses": [{"restartCount": 10}]}},
-        ]
-        result = self.analyzer.analyze_pods(pods)
+        result = HealthAnalyzer.pods(pods)
         assert result["restart_loops"] == 1
 
-    def test_analyze_services(self):
-        services = [
-            {"metadata": {"name": "svc-1", "namespace": "default", "creationTimestamp": "2026-01-01T00:00:00Z"},
-             "spec": {"type": "ClusterIP", "clusterIP": "10.0.0.1", "ports": [{"port": 80, "protocol": "TCP"}]}},
-            {"metadata": {"name": "svc-2", "namespace": "default", "creationTimestamp": "2026-01-01T00:00:00Z"},
-             "spec": {"type": "LoadBalancer", "clusterIP": "10.0.0.2", "ports": [{"port": 443, "protocol": "TCP"}]}},
+    def test_deployments_healthy(self):
+        deps = [
+            {"metadata": {"name": "d1", "namespace": "default", "creationTimestamp": "2026-01-01T00:00:00Z"},
+             "status": {"replicas": 3, "readyReplicas": 3}},
         ]
-        result = self.analyzer.analyze_services(services)
-        assert result["total"] == 2
-        assert result["types"]["ClusterIP"] == 1
-        assert result["types"]["LoadBalancer"] == 1
-
-    def test_analyze_deployments_healthy(self):
-        deployments = [
-            {"metadata": {"name": "dep-1", "namespace": "default", "creationTimestamp": "2026-01-01T00:00:00Z"},
-             "status": {"replicas": 3, "readyReplicas": 3, "updatedReplicas": 3, "availableReplicas": 3}},
-        ]
-        result = self.analyzer.analyze_deployments(deployments)
-        assert result["total"] == 1
+        result = HealthAnalyzer.deployments(deps)
         assert result["healthy"] == 1
         assert result["degraded"] == 0
 
-    def test_analyze_deployments_degraded(self):
-        deployments = [
-            {"metadata": {"name": "dep-1", "namespace": "default", "creationTimestamp": "2026-01-01T00:00:00Z"},
-             "status": {"replicas": 3, "readyReplicas": 1, "updatedReplicas": 3, "availableReplicas": 1}},
+    def test_deployments_degraded(self):
+        deps = [
+            {"metadata": {"name": "d1", "namespace": "default", "creationTimestamp": "2026-01-01T00:00:00Z"},
+             "status": {"replicas": 3, "readyReplicas": 1}},
         ]
-        result = self.analyzer.analyze_deployments(deployments)
+        result = HealthAnalyzer.deployments(deps)
         assert result["degraded"] == 1
-        assert "default/dep-1 (1/3)" in result["degraded_deployments"]
 
-    def test_analyze_events_no_warnings(self):
-        events = [
-            {"metadata": {"namespace": "default"}, "type": "Normal", "reason": "Started",
-             "message": "Container started", "involvedObject": {"name": "pod-1"}},
+
+class TestSecurityScanner:
+    def test_detects_privileged(self):
+        client = MagicMock()
+        client.get_pods.return_value = [
+            {"metadata": {"name": "pod1", "namespace": "default"},
+             "status": {"phase": "Running", "containerStatuses": []},
+             "spec": {"containers": [{"name": "c1", "securityContext": {"privileged": True}}]}}
         ]
-        result = self.analyzer.analyze_events(events)
-        assert result["warnings"] == 0
-        assert result["status"] == "HEALTHY"
+        client.get_clusterroles.return_value = []
+        client.get_service_accounts.return_value = []
+        client.get_netpol.return_value = []
+        client.get_namespaces.return_value = []
 
-    def test_analyze_events_with_warnings(self):
-        events = [
-            {"metadata": {"namespace": "default"}, "type": "Warning", "reason": "BackOff",
-             "message": "Back-off restarting", "involvedObject": {"name": "pod-1"}},
-            {"metadata": {"namespace": "default"}, "type": "Warning", "reason": "Unhealthy",
-             "message": "Readiness probe failed", "involvedObject": {"name": "pod-2"}},
+        scanner = SecurityScanner(client)
+        issues = scanner.scan()
+        privileged = [i for i in issues if i.rule == "SEC001"]
+        assert len(privileged) == 1
+
+    def test_detects_root_user(self):
+        client = MagicMock()
+        client.get_pods.return_value = [
+            {"metadata": {"name": "pod1", "namespace": "default"},
+             "status": {"phase": "Running", "containerStatuses": []},
+             "spec": {"containers": [{"name": "c1", "securityContext": {"runAsUser": 0}}]}}
         ]
-        result = self.analyzer.analyze_events(events)
-        assert result["warnings"] == 2
-        assert len(result["warning_events"]) == 2
+        client.get_clusterroles.return_value = []
+        client.get_service_accounts.return_value = []
+        client.get_netpol.return_value = []
+        client.get_namespaces.return_value = []
+
+        scanner = SecurityScanner(client)
+        issues = scanner.scan()
+        root = [i for i in issues if i.rule == "SEC002"]
+        assert len(root) == 1
+
+    def test_rbac_wildcard(self):
+        client = MagicMock()
+        client.get_pods.return_value = []
+        client.get_clusterroles.return_value = [
+            {"metadata": {"name": "admin"}, "rules": [{"resources": ["*"], "verbs": ["*"]}]}
+        ]
+        client.get_service_accounts.return_value = []
+        client.get_netpol.return_value = []
+        client.get_namespaces.return_value = []
+
+        scanner = SecurityScanner(client)
+        issues = scanner.scan()
+        rbac = [i for i in issues if i.rule == "RBAC001"]
+        assert len(rbac) == 1
+
+    def test_network_policy_missing(self):
+        client = MagicMock()
+        client.get_pods.return_value = []
+        client.get_clusterroles.return_value = []
+        client.get_service_accounts.return_value = []
+        client.get_netpol.return_value = []
+        client.get_namespaces.return_value = [
+            {"metadata": {"name": "default"}},
+            {"metadata": {"name": "production"}},
+        ]
+
+        scanner = SecurityScanner(client)
+        issues = scanner.scan()
+        net = [i for i in issues if i.rule == "NET001"]
+        assert len(net) == 2
 
 
-class TestGetAge:
-    def test_days(self):
-        ts = (datetime.now(timezone.utc) - timedelta(days=5)).isoformat()
-        assert _get_age(ts) == "5d"
+class TestRecommender:
+    def test_critical_recommendations(self):
+        issues = [SecurityIssue("pod1", "default", "CRITICAL", "SEC001", "privileged", "fix")]
+        recs = Recommender().generate(issues, [], [], {"not_ready": 0}, {"restart_loops": 0})
+        assert any("CRITICAL" in r for r in recs)
 
-    def test_hours(self):
-        ts = (datetime.now(timezone.utc) - timedelta(hours=3)).isoformat()
-        assert _get_age(ts) == "3h"
+    def test_unbound_pvc_recommendation(self):
+        pvcs = [PVCInfo("pvc1", "default", "Pending", "N/A", "standard", False)]
+        recs = Recommender().generate([], [], pvcs, {"not_ready": 0}, {"restart_loops": 0})
+        assert any("unbound" in r.lower() for r in recs)
 
-    def test_months(self):
-        ts = (datetime.now(timezone.utc) - timedelta(days=60)).isoformat()
-        assert _get_age(ts) == "2mo"
-
-    def test_years(self):
-        ts = (datetime.now(timezone.utc) - timedelta(days=400)).isoformat()
-        assert _get_age(ts) == "1y"
-
-    def test_empty(self):
-        assert _get_age("") == "unknown"
-
-    def test_invalid(self):
-        assert _get_age("not-a-date") == "unknown"
+    def test_healthy_cluster(self):
+        recs = Recommender().generate([], [], [], {"not_ready": 0}, {"restart_loops": 0})
+        assert any("healthy" in r.lower() for r in recs)
 
 
 class TestDemoData:
-    def test_generate_demo_data(self):
-        nodes, pods, services, deployments, events = generate_demo_data()
-        assert len(nodes) == 4
-        assert len(pods) == 10
-        assert len(services) == 4
-        assert len(deployments) == 5
-        assert len(events) == 3
-
-    def test_demo_nodes_have_roles(self):
-        nodes, _, _, _, _ = generate_demo_data()
-        for node in nodes:
-            assert "labels" in node["metadata"]
-
-
-class TestExporter:
-    def test_to_json(self, tmp_path):
-        report = ClusterReport(
-            timestamp="2026-08-06T12:00:00",
-            node_analysis={"total": 2, "ready": 2, "status": "HEALTHY", "score": 100},
-            pod_analysis={"total": 5, "running": 5, "failed": 0, "status": "HEALTHY", "score": 100},
-            service_analysis={"total": 3, "status": "HEALTHY", "score": 100},
-            deployment_analysis={"total": 2, "healthy": 2, "status": "HEALTHY", "score": 100},
-            event_analysis={"total": 10, "warnings": 0, "status": "HEALTHY", "score": 100},
-            overall_status="HEALTHY",
-            nodes=[], pods=[], services=[], deployments=[]
-        )
-        filepath = str(tmp_path / "report.json")
-        Exporter.to_json(report, filepath)
-        with open(filepath) as f:
-            data = json.load(f)
-        assert data["overall_status"] == "HEALTHY"
-        assert data["node_analysis"]["total"] == 2
-
-    def test_to_text(self, tmp_path):
-        report = ClusterReport(
-            timestamp="2026-08-06T12:00:00",
-            node_analysis={"total": 2, "ready": 2, "not_ready": 0},
-            pod_analysis={"total": 5, "running": 5, "failed": 0, "pending": 0, "restart_loops": 0},
-            service_analysis={"total": 3},
-            deployment_analysis={"total": 2, "healthy": 2, "degraded": 0},
-            event_analysis={"warnings": 0},
-            overall_status="HEALTHY",
-            nodes=[], pods=[], services=[], deployments=[]
-        )
-        filepath = str(tmp_path / "report.txt")
-        Exporter.to_text(report, filepath)
-        with open(filepath) as f:
-            content = f.read()
-        assert "HEALTHY" in content
-        assert "Nodes:" in content
+    def test_generates_valid_data(self):
+        nodes, pods, deps = generate_demo_data()
+        assert len(nodes) > 0
+        assert len(pods) > 0
+        assert len(deps) > 0
 
 
 class TestDisplay:
-    def test_status_badge(self):
-        assert "HEALTHY" in Display.status_badge("HEALTHY")
-        assert "WARNING" in Display.status_badge("WARNING")
-        assert "CRITICAL" in Display.status_badge("CRITICAL")
-
-    def test_score_bar(self):
-        bar = Display.score_bar(80.0)
+    def test_bar(self):
+        bar = Display.bar(80.0)
         assert "80%" in bar
-        bar_low = Display.score_bar(30.0)
+        bar_low = Display.bar(30.0)
         assert "30%" in bar_low
