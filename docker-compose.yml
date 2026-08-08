@@ -1,0 +1,27 @@
+version: "3.8"
+
+services:
+  k8s-monitor:
+    build: .
+    container_name: k8s-health-monitor
+    volumes:
+      - ${KUBECONFIG:-~/.kube/config}:/root/.kube/config:ro
+    environment:
+      - KUBECONFIG=/root/.kube/config
+    networks:
+      - k8s-monitor
+
+  k8s-monitor-watch:
+    build: .
+    container_name: k8s-health-monitor-watch
+    command: ["watch", "-i", "10"]
+    volumes:
+      - ${KUBECONFIG:-~/.kube/config}:/root/.kube/config:ro
+    environment:
+      - KUBECONFIG=/root/.kube/config
+    networks:
+      - k8s-monitor
+
+networks:
+  k8s-monitor:
+    driver: bridge
