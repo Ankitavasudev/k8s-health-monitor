@@ -1,489 +1,313 @@
 #!/usr/bin/env python3
-"""
-K8s Health Monitor - Kubernetes Cluster Health Checker
-A CLI tool to monitor Kubernetes cluster health in real-time.
-Author: Ankit | GitHub: https://github.com/ankit
-"""
+"""K8s Health Monitor v3.0 - Advanced Kubernetes Cluster Health Checker with Security Scanning"""
 
-import subprocess
-import json
-import sys
-import os
+import subprocess, json, sys, os, time, argparse
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List, Dict, Any
+from dataclasses import dataclass, field, asdict
+from enum import Enum
+from collections import defaultdict
 
 try:
     from rich.console import Console
     from rich.table import Table
     from rich.panel import Panel
-    from rich.layout import Layout
-    from rich.text import Text
     from rich import box
-    HAS_RICH = True
 except ImportError:
-    HAS_RICH = False
-    print("Installing rich library...")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "rich", "-q"])
-    from rich.console import Console
-    from rich.table import Table
-    from rich.panel import Panel
-    from rich.layout import Layout
-    from rich.text import Text
-    from rich import box
-
+    print("[!] pip install rich"); sys.exit(1)
 
 console = Console()
 
-# ─── Colors ────────────────────────────────────────────────
-class Colors:
-    GREEN = "\033[92m"
-    RED = "\033[91m"
-    YELLOW = "\033[93m"
-    BLUE = "\033[94m"
-    CYAN = "\033[96m"
-    BOLD = "\033[1m"
-    RESET = "\033[0m"
+@dataclass
+class SecurityIssue:
+    resource: str; namespace: str; severity: str; rule: str; message: str; remediation: str
 
+@dataclass
+class PVCInfo:
+    name: str; namespace: str; status: str; capacity: str; storage_class: str; bound: bool
 
-# ─── Kubectl Wrapper ───────────────────────────────────────
+@dataclass
+class ResourceQuota:
+    namespace: str; cpu_used: str; cpu_limit: str; memory_used: str; memory_limit: str; pods_used: int; pods_limit: int; usage_pct: float
+
+@dataclass
+class NetworkPolicy:
+    name: str; namespace: str; ingress_rules: int; egress_rules: int
+
 class KubectlClient:
-    """Wrapper around kubectl commands."""
+    def __init__(self, kubeconfig=None, context=None, namespace=""):
+        self.kubeconfig, self.context, self.namespace = kubeconfig, context, namespace
 
-    def __init__(self, kubeconfig: Optional[str] = None, context: Optional[str] = None):
-        self.kubeconfig = kubeconfig
-        self.context = context
-
-    def _build_cmd(self, args: list) -> list:
+    def _cmd(self, args):
         cmd = ["kubectl"]
-        if self.kubeconfig:
-            cmd.extend(["--kubeconfig", self.kubeconfig])
-        if self.context:
-            cmd.extend(["--context", self.context])
-        cmd.extend(args)
-        return cmd
+        if self.kubeconfig: cmd.extend(["--kubeconfig", self.kubeconfig])
+        if self.context: cmd.extend(["--context", self.context])
+        if self.namespace: cmd.extend(["-n", self.namespace])
+        cmd.extend(args); return cmd
 
-    def run(self, args: list, output_json: bool = True) -> Optional[dict]:
-        cmd = self._build_cmd(args)
-        if output_json:
-            cmd.extend(["-o", "json"])
+    def run(self, args, json_out=True, timeout=30):
+        cmd = self._cmd(args)
+        if json_out: cmd.append("-o"); cmd.append("json")
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-            if result.returncode != 0:
-                return None
-            if output_json:
-                return json.loads(result.stdout)
-            return result.stdout
-        except (subprocess.TimeoutExpired, json.JSONDecodeError, FileNotFoundError):
-            return None
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+            if r.returncode != 0: return None
+            return json.loads(r.stdout) if json_out else {"output": r.stdout}
+        except: return None
 
-    def get_nodes(self) -> list:
-        data = self.run(["get", "nodes"])
-        return data.get("items", []) if data else []
-
-    def get_pods(self, namespace: str = "") -> list:
-        if namespace:
-            data = self.run(["get", "pods", "-n", namespace])
-        else:
-            data = self.run(["get", "pods", "--all-namespaces"])
-        return data.get("items", []) if data else []
-
-    def get_services(self, namespace: str = "") -> list:
-        if namespace:
-            data = self.run(["get", "services", "-n", namespace])
-        else:
-            data = self.run(["get", "services", "--all-namespaces"])
-        return data.get("items", []) if data else []
-
-    def get_namespaces(self) -> list:
-        data = self.run(["get", "namespaces"])
-        return data.get("items", []) if data else []
-
-    def get_deployments(self, namespace: str = "") -> list:
-        if namespace:
-            data = self.run(["get", "deployments", "-n", namespace])
-        else:
-            data = self.run(["get", "deployments", "--all-namespaces"])
-        return data.get("items", []) if data else []
+    def available(self): return self.run(["version", "--client"], json_out=False) is not None
+    def get(self, resource, ns=""):
+        args = ["get", resource]
+        if ns: args.extend(["-n", ns])
+        else: args.extend(["--all-namespaces"])
+        d = self.run(args); return d.get("items", []) if d else []
+    def get_nodes(self): return self.get("nodes")
+    def get_pods(self, ns=""): return self.get("pods", ns)
+    def get_deployments(self, ns=""): return self.get("deployments", ns)
+    def get_services(self, ns=""): return self.get("services", ns)
+    def get_events(self, ns=""): return self.get("events", ns)
+    def get_pvcs(self, ns=""): return self.get("pvc", ns)
+    def get_pvs(self): return self.get("pv")
+    def get_quotas(self, ns=""): return self.get("resourcequotas", ns)
+    def get_netpol(self, ns=""): return self.get("networkpolicies", ns)
+    def get_clusterroles(self): return self.get("clusterroles")
+    def get_service_accounts(self, ns=""): return self.get("serviceaccounts", ns)
+    def get_namespaces(self): return self.get("namespaces")
+    def get_ingresses(self, ns=""): return self.get("ingresses", ns)
 
 
-# ─── Health Analyzer ───────────────────────────────────────
-class HealthAnalyzer:
-    """Analyzes cluster health and generates reports."""
+class SecurityScanner:
+    def __init__(self, client: KubectlClient):
+        self.client = client; self.issues = []
 
-    @staticmethod
-    def analyze_nodes(nodes: list) -> dict:
-        total = len(nodes)
-        ready = sum(1 for n in nodes if any(
-            c.get("type") == "Ready" and c.get("status") == "True"
-            for c in n.get("status", {}).get("conditions", [])
-        ))
-        not_ready = total - ready
-        return {
-            "total": total,
-            "ready": ready,
-            "not_ready": not_ready,
-            "status": "HEALTHY" if not_ready == 0 else "WARNING" if not_ready <= 1 else "CRITICAL"
-        }
-
-    @staticmethod
-    def analyze_pods(pods: list) -> dict:
-        total = len(pods)
-        running = sum(1 for p in pods if p.get("status", {}).get("phase") == "Running")
-        pending = sum(1 for p in pods if p.get("status", {}).get("phase") == "Pending")
-        failed = sum(1 for p in pods if p.get("status", {}).get("phase") == "Failed")
-        succeeded = sum(1 for p in pods if p.get("status", {}).get("phase") == "Succeeded")
-        unknown = total - running - pending - failed - succeeded
-
-        # Check for restart loops
-        restart_loops = 0
-        for p in pods:
-            for cs in p.get("status", {}).get("containerStatuses", []):
-                if cs.get("restartCount", 0) > 5:
-                    restart_loops += 1
-
-        return {
-            "total": total,
-            "running": running,
-            "pending": pending,
-            "failed": failed,
-            "succeeded": succeeded,
-            "unknown": unknown,
-            "restart_loops": restart_loops,
-            "status": "HEALTHY" if failed == 0 and pending == 0 else "WARNING" if failed <= 2 else "CRITICAL"
-        }
-
-    @staticmethod
-    def analyze_services(services: list) -> dict:
-        total = len(services)
-        with_endpoints = 0
-        without_endpoints = 0
-        for svc in services:
-            svc_type = svc.get("spec", {}).get("type", "ClusterIP")
-            if svc_type in ["LoadBalancer", "NodePort"]:
-                with_endpoints += 1
-            else:
-                with_endpoints += 1
-        return {
-            "total": total,
-            "status": "HEALTHY"
-        }
-
-    @staticmethod
-    def analyze_deployments(deployments: list) -> dict:
-        total = len(deployments)
-        healthy = 0
-        degraded = 0
-        for d in deployments:
-            status = d.get("status", {})
-            desired = status.get("replicas", 0)
-            ready = status.get("readyReplicas", 0)
-            if desired == ready:
-                healthy += 1
-            else:
-                degraded += 1
-        return {
-            "total": total,
-            "healthy": healthy,
-            "degraded": degraded,
-            "status": "HEALTHY" if degraded == 0 else "WARNING" if degraded <= 1 else "CRITICAL"
-        }
-
-
-# ─── Display ───────────────────────────────────────────────
-class Display:
-    """Handles terminal display with rich formatting."""
-
-    @staticmethod
-    def banner():
-        banner_text = r"""
- _    _      _                          __  __ _           _
-| |  | |    | |                        |  \/  (_)         | |
-| |__| | ___| |__   ___ _ __ _   _  __| \  / |_ _ __   __| | ___ _ __
-|  __  |/ _ \ '_ \ / _ \ '__| | | |/ _` |\/| | | '_ \ / _` |/ _ \ '__|
-| |  | |  __/ |_) |  __/ |  | |_| | (_| |  | | | | | | (_| |  __/ |
-|_|  |_|\___|_.__/ \___|_|   \__, |\__,_|_| |_|_|_| |_|\__,_|\___|_|
-                               __/ |
-                              |___/
-        """
-        console.print(Panel(banner_text.strip(), style="bold cyan", box=box.SIMPLE))
-        console.print(f"  [dim]Kubernetes Cluster Health Monitor v1.0[/dim]")
-        console.print(f"  [dim]{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}[/dim]\n")
-
-    @staticmethod
-    def status_badge(status: str) -> str:
-        badges = {
-            "HEALTHY": "[bold green][OK] HEALTHY[/bold green]",
-            "WARNING": "[bold yellow][!!] WARNING[/bold yellow]",
-            "CRITICAL": "[bold red][XX] CRITICAL[/bold red]",
-        }
-        return badges.get(status, f"[bold white][--] {status}[/bold white]")
-
-    @staticmethod
-    def show_nodes(nodes: list, analysis: dict):
-        table = Table(title="Node Status", box=box.ROUNDED, show_lines=True)
-        table.add_column("Name", style="cyan", no_wrap=True)
-        table.add_column("Status", justify="center")
-        table.add_column("Roles", style="dim")
-        table.add_column("Age", style="dim")
-        table.add_column("Version", style="green")
-
-        for node in nodes:
-            name = node["metadata"]["name"]
-            labels = node["metadata"].get("labels", {})
-            roles = [k.replace("node-role.kubernetes.io/", "") for k in labels if k.startswith("node-role.kubernetes.io/")]
-            role_str = ", ".join(roles) if roles else "<none>"
-
-            conditions = node.get("status", {}).get("conditions", [])
-            is_ready = any(c.get("type") == "Ready" and c.get("status") == "True" for c in conditions)
-            status = "[green]Ready[/green]" if is_ready else "[red]NotReady[/red]"
-
-            version = node.get("status", {}).get("nodeInfo", {}).get("kubeletVersion", "unknown")
-            age = _get_age(node["metadata"].get("creationTimestamp", ""))
-
-            table.add_row(name, status, role_str, age, version)
-
-        console.print(table)
-        console.print(f"  Nodes: {analysis['ready']}/{analysis['total']} ready {Display.status_badge(analysis['status'])}\n")
-
-    @staticmethod
-    def show_pods(pods: list, analysis: dict):
-        table = Table(title="Pod Status", box=box.ROUNDED, show_lines=True)
-        table.add_column("Namespace", style="cyan", no_wrap=True)
-        table.add_column("Name", style="white", max_width=40)
-        table.add_column("Status", justify="center")
-        table.add_column("Restarts", justify="center")
-        table.add_column("Age", style="dim")
-
-        for pod in pods[:30]:  # Show max 30 pods
-            ns = pod["metadata"].get("namespace", "default")
+    def scan(self):
+        pods = self.client.get_pods()
+        for pod in pods:
+            ns = pod.get("metadata", {}).get("namespace", "default")
             name = pod["metadata"]["name"]
-            phase = pod.get("status", {}).get("phase", "Unknown")
+            for c in pod.get("spec", {}).get("containers", []):
+                sc = c.get("securityContext", {})
+                if sc.get("privileged"):
+                    self._add(ns, name, "CRITICAL", "SEC001", f"Container '{c['name']}' runs PRIVILEGED", "Remove privileged: true")
+                if sc.get("runAsUser") == 0:
+                    self._add(ns, name, "CRITICAL", "SEC002", f"Container '{c['name']}' runs as ROOT", "Set runAsUser to non-zero")
+                if not sc.get("readOnlyRootFilesystem"):
+                    self._add(ns, name, "WARNING", "SEC003", f"Container '{c['name']}' has writable rootfs", "Set readOnlyRootFilesystem: true")
+                if not sc.get("allowPrivilegeEscalation") == False:
+                    self._add(ns, name, "WARNING", "SEC004", f"Container '{c['name']}' allows privilege escalation", "Set allowPrivilegeEscalation: false")
 
-            status_colors = {
-                "Running": "green", "Pending": "yellow",
-                "Failed": "red", "Succeeded": "blue", "Unknown": "dim"
-            }
-            color = status_colors.get(phase, "white")
-            status = f"[{color}]{phase}[/{color}]"
+        crs = self.client.get_clusterroles()
+        for cr in crs:
+            name = cr["metadata"]["name"]
+            for rule in cr.get("rules", []):
+                if "*" in (rule.get("resources") or []):
+                    self._add("cluster", name, "CRITICAL", "RBAC001", f"ClusterRole '{name}' has wildcard resources", "Apply least privilege")
+                if "*" in (rule.get("verbs") or []):
+                    self._add("cluster", name, "WARNING", "RBAC002", f"ClusterRole '{name}' has wildcard verbs", "Restrict to specific verbs")
 
-            restarts = sum(
-                cs.get("restartCount", 0)
-                for cs in pod.get("status", {}).get("containerStatuses", [])
-            )
-            restart_str = f"[red]{restarts}[/red]" if restarts > 5 else str(restarts)
+        sa = self.client.get_service_accounts()
+        for s in sa:
+            ns = s.get("metadata", {}).get("namespace", "default")
+            name = s["metadata"]["name"]
+            if s.get("automountServiceAccountToken", True) and name != "default":
+                self._add(ns, name, "WARNING", "SA001", f"SA '{name}' auto-mounts token", "Set automountServiceAccountToken: false")
 
-            age = _get_age(pod["metadata"].get("creationTimestamp", ""))
-            table.add_row(ns, name, status, restart_str, age)
+        ns_data = self.client.get_namespaces()
+        netpol = self.client.get_netpol()
+        np_ns = set(p.get("metadata", {}).get("namespace") for p in netpol)
+        for ns in ns_data:
+            n = ns["metadata"]["name"]
+            if n.startswith("kube-"): continue
+            if n not in np_ns:
+                self._add(n, "namespace", "WARNING", "NET001", f"Namespace '{n}' has no NetworkPolicy", "Add default-deny policy")
+        return self.issues
 
-        if len(pods) > 30:
-            console.print(f"  [dim]... and {len(pods) - 30} more pods[/dim]")
+    def _add(self, ns, res, sev, rule, msg, fix):
+        self.issues.append(SecurityIssue(res, ns, sev, rule, msg, fix))
 
-        console.print(table)
-        console.print(f"  Pods: {analysis['running']}/{analysis['total']} running "
-                      f"({analysis['pending']} pending, {analysis['failed']} failed) "
-                      f"{Display.status_badge(analysis['status'])}\n")
+
+class ResourceAnalyzer:
+    def __init__(self, client: KubectlClient): self.client = client
+
+    def analyze_pvcs(self):
+        pvcs = self.client.get_pvcs()
+        return [PVCInfo(p["metadata"]["name"], p.get("metadata",{}).get("namespace","default"),
+                p.get("status",{}).get("phase","Unknown"), str(p.get("status",{}).get("capacity",{}).get("storage","N/A")),
+                p.get("spec",{}).get("storageClassName","N/A"), p.get("status",{}).get("phase") == "Bound") for p in pvcs]
+
+    def analyze_quotas(self):
+        quotas = self.client.get_quotas()
+        results = []
+        for q in quotas:
+            ns = q.get("metadata",{}).get("namespace","default")
+            h = q.get("status",{}).get("hard",{}); u = q.get("status",{}).get("used",{})
+            try: pct = int(u.get("cpu","0").replace("m","")) / max(int(h.get("cpu","0").replace("m","")),1) * 100
+            except: pct = 0
+            results.append(ResourceQuota(ns, u.get("cpu","0"), h.get("cpu","0"), u.get("memory","0"), h.get("memory","0"),
+                int(u.get("pods","0")), int(h.get("pods","0")), pct))
+        return results
+
+    def analyze_netpol(self):
+        policies = self.client.get_netpol()
+        return [NetworkPolicy(p["metadata"]["name"], p.get("metadata",{}).get("namespace","default"),
+                len(p.get("spec",{}).get("ingress",[])), len(p.get("spec",{}).get("egress",[]))) for p in policies]
+
+
+class HealthAnalyzer:
+    @staticmethod
+    def nodes(nodes):
+        t = len(nodes)
+        r = sum(1 for n in nodes if any(c.get("type")=="Ready" and c.get("status")=="True" for c in n.get("status",{}).get("conditions",[])))
+        return {"total":t,"ready":r,"not_ready":t-r,"score":r/t*100 if t else 0,"status":"HEALTHY" if t-r==0 else "WARNING"}
 
     @staticmethod
-    def show_services(services: list, analysis: dict):
-        table = Table(title="Services", box=box.ROUNDED, show_lines=True)
-        table.add_column("Namespace", style="cyan")
-        table.add_column("Name", style="white")
-        table.add_column("Type", style="yellow")
-        table.add_column("Cluster IP", style="dim")
-        table.add_column("Ports", style="green")
-
-        for svc in services[:20]:
-            ns = svc["metadata"].get("namespace", "default")
-            name = svc["metadata"]["name"]
-            svc_type = svc.get("spec", {}).get("type", "ClusterIP")
-            cluster_ip = svc.get("spec", {}).get("clusterIP", "None")
-            ports = ", ".join(
-                f"{p.get('port')}/{p.get('protocol', 'TCP')}"
-                for p in svc.get("spec", {}).get("ports", [])
-            )
-            table.add_row(ns, name, svc_type, cluster_ip, ports or "-")
-
-        console.print(table)
-        console.print(f"  Services: {analysis['total']} total {Display.status_badge(analysis['status'])}\n")
+    def pods(pods):
+        t = len(pods)
+        run = sum(1 for p in pods if p.get("status",{}).get("phase")=="Running")
+        fail = sum(1 for p in pods if p.get("status",{}).get("phase")=="Failed")
+        pend = sum(1 for p in pods if p.get("status",{}).get("phase")=="Pending")
+        rl = sum(1 for p in pods for cs in p.get("status",{}).get("containerStatuses",[]) if cs.get("restartCount",0)>5)
+        return {"total":t,"running":run,"failed":fail,"pending":pend,"restart_loops":rl,"score":run/t*100 if t else 0,"status":"HEALTHY" if fail==0 else "CRITICAL"}
 
     @staticmethod
-    def show_deployments(deployments: list, analysis: dict):
-        table = Table(title="Deployments", box=box.ROUNDED, show_lines=True)
-        table.add_column("Namespace", style="cyan")
-        table.add_column("Name", style="white")
-        table.add_column("Ready", justify="center")
-        table.add_column("Up-to-date", justify="center")
-        table.add_column("Available", justify="center")
-        table.add_column("Age", style="dim")
+    def deployments(deps):
+        t = len(deps)
+        h = sum(1 for d in deps if d.get("status",{}).get("readyReplicas",0)==d.get("status",{}).get("replicas",0))
+        return {"total":t,"healthy":h,"degraded":t-h,"score":h/t*100 if t else 0,"status":"HEALTHY" if t-h==0 else "WARNING"}
 
-        for d in deployments[:20]:
-            ns = d["metadata"].get("namespace", "default")
-            name = d["metadata"]["name"]
-            status = d.get("status", {})
-            ready = f"{status.get('readyReplicas', 0)}/{status.get('replicas', 0)}"
-            updated = status.get("updatedReplicas", 0)
-            available = status.get("availableReplicas", 0)
-            age = _get_age(d["metadata"].get("creationTimestamp", ""))
 
-            ready_color = "green" if status.get("readyReplicas", 0) == status.get("replicas", 0) else "red"
-            table.add_row(ns, name, f"[{ready_color}]{ready}[/{ready_color}]", str(updated), str(available), age)
+class Recommender:
+    def generate(self, sec, quotas, pvcs, node_a, pod_a):
+        r = []
+        crit = sum(1 for i in sec if i.severity=="CRITICAL")
+        warn = sum(1 for i in sec if i.severity=="WARNING")
+        if crit: r.append(f"CRITICAL: {crit} security issues — fix privileged containers & RBAC immediately")
+        if warn: r.append(f"WARNING: {warn} security warnings — review network policies & service accounts")
+        for q in quotas:
+            if q.usage_pct > 80: r.append(f"Namespace '{q.namespace}' CPU at {q.usage_pct:.0f}% — increase limits")
+        unbound = [p for p in pvcs if not p.bound]
+        if unbound: r.append(f"{len(unbound)} unbound PVCs — check storage provisioner")
+        if node_a["not_ready"]>0: r.append(f"{node_a['not_ready']} nodes not ready — check kubelet")
+        if pod_a["restart_loops"]>0: r.append(f"{pod_a['restart_loops']} pods in restart loop — check resource limits")
+        if not r: r.append("Cluster healthy. No action needed.")
+        return r
 
-        console.print(table)
-        console.print(f"  Deployments: {analysis['healthy']}/{analysis['total']} healthy "
-                      f"{Display.status_badge(analysis['status'])}\n")
 
+class Display:
     @staticmethod
-    def show_summary(node_analysis: dict, pod_analysis: dict, svc_analysis: dict, deploy_analysis: dict):
-        # Overall health
-        statuses = [node_analysis["status"], pod_analysis["status"], svc_analysis["status"], deploy_analysis["status"]]
-        if "CRITICAL" in statuses:
-            overall = "CRITICAL"
-        elif "WARNING" in statuses:
-            overall = "WARNING"
-        else:
-            overall = "HEALTHY"
-
-        summary = Table(box=box.SIMPLE, show_header=False, padding=(0, 2))
-        summary.add_column("Metric", style="bold")
-        summary.add_column("Value", justify="right")
-
-        summary.add_row("Nodes", f"{node_analysis['ready']}/{node_analysis['total']} ready")
-        summary.add_row("Pods", f"{pod_analysis['running']}/{pod_analysis['total']} running")
-        summary.add_row("Pods Failed", f"[red]{pod_analysis['failed']}[/red]" if pod_analysis['failed'] > 0 else "0")
-        summary.add_row("Pending Pods", f"[yellow]{pod_analysis['pending']}[/yellow]" if pod_analysis['pending'] > 0 else "0")
-        summary.add_row("Restart Loops", f"[red]{pod_analysis['restart_loops']}[/red]" if pod_analysis['restart_loops'] > 0 else "0")
-        summary.add_row("Services", str(svc_analysis['total']))
-        summary.add_row("Deployments", f"{deploy_analysis['healthy']}/{deploy_analysis['total']} healthy")
-        summary.add_row("Overall", Display.status_badge(overall))
-
-        console.print(Panel(summary, title="[bold]Cluster Health Summary[/bold]", border_style="cyan"))
-
-
-# ─── Utilities ─────────────────────────────────────────────
-def _get_age(timestamp: str) -> str:
-    if not timestamp:
-        return "unknown"
-    try:
-        created = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-        now = datetime.now(created.tzinfo)
-        delta = now - created
-        days = delta.days
-        hours = delta.seconds // 3600
-        if days > 365:
-            return f"{days // 365}y"
-        elif days > 30:
-            return f"{days // 30}mo"
-        elif days > 0:
-            return f"{days}d"
-        elif hours > 0:
-            return f"{hours}h"
-        else:
-            return f"{delta.seconds // 60}m"
-    except Exception:
-        return "unknown"
+    def banner(): console.print(Panel.fit("[bold cyan]K8s Health Monitor v3.0.0[/bold cyan]\n[dim]Security + PVC + RBAC + Quotas + Recommendations[/dim]", border_style="cyan"))
+    @staticmethod
+    def bar(s):
+        f = int(s/10); c = "green" if s>=80 else "yellow" if s>=50 else "red"
+        return f"[{c}]{'|'*f}[/{c}][dim]{'.'*(10-f)}[/dim] {s:.0f}%"
+    @staticmethod
+    def security(issues):
+        if not issues: console.print("[green]No security issues[/green]"); return
+        t = Table(title="Security Analysis", box=box.ROUNDED, show_lines=True)
+        t.add_column("Sev",width=10); t.add_column("Rule",width=8); t.add_column("Resource",style="cyan"); t.add_column("Issue",max_width=50); t.add_column("Fix",max_width=40,style="dim")
+        for i in issues:
+            sc = {"CRITICAL":"red","WARNING":"yellow","INFO":"blue"}.get(i.severity,"white")
+            t.add_row(f"[{sc}]{i.severity}[/{sc}]",i.rule,i.resource,i.message,i.remediation)
+        console.print(t)
+    @staticmethod
+    def pvcs(pvcs):
+        if not pvcs: console.print("[dim]No PVCs found[/dim]"); return
+        t = Table(title="Persistent Volume Claims", box=box.ROUNDED)
+        t.add_column("Namespace",style="cyan"); t.add_column("Name"); t.add_column("Status"); t.add_column("Capacity",justify="right"); t.add_column("StorageClass",style="dim"); t.add_column("Bound")
+        for p in pvcs:
+            bc = "green" if p.bound else "red"; sc2 = "green" if p.status=="Bound" else "yellow"
+            t.add_row(p.namespace,p.name,f"[{sc2}]{p.status}[/{sc2}]",p.capacity,p.storage_class,f"[{bc}]{'Yes' if p.bound else 'No'}[/{bc}]")
+        console.print(t)
+    @staticmethod
+    def quotas(quotas):
+        if not quotas: console.print("[dim]No quotas[/dim]"); return
+        t = Table(title="Resource Quotas", box=box.ROUNDED)
+        t.add_column("Namespace",style="cyan"); t.add_column("CPU"); t.add_column("Memory"); t.add_column("Pods"); t.add_column("Usage")
+        for q in quotas:
+            uc = "green" if q.usage_pct<60 else "yellow" if q.usage_pct<80 else "red"
+            t.add_row(q.namespace,f"{q.cpu_used}/{q.cpu_limit}",f"{q.memory_used}/{q.memory_limit}",f"{q.pods_used}/{q.pods_limit}",f"[{uc}]{q.usage_pct:.0f}%[/{uc}]")
+        console.print(t)
+    @staticmethod
+    def netpol(pols):
+        if not pols: console.print("[dim]No network policies[/dim]"); return
+        t = Table(title="Network Policies", box=box.ROUNDED)
+        t.add_column("Namespace",style="cyan"); t.add_column("Name"); t.add_column("Ingress",justify="center"); t.add_column("Egress",justify="center")
+        for p in pols: t.add_row(p.namespace,p.name,str(p.ingress_rules),str(p.egress_rules))
+        console.print(t)
+    @staticmethod
+    def recs(r): console.print(Panel("\n".join(f"[yellow]*[/yellow] {x}" for x in r),title="[bold]Recommendations[/bold]",border_style="yellow"))
 
 
-# ─── Demo Mode ─────────────────────────────────────────────
-def generate_demo_data():
-    """Generate demo data when kubectl is not available."""
-    console.print("[yellow]kubectl not found — running in DEMO mode with sample data[/yellow]\n")
-
-    nodes = [
-        {"metadata": {"name": "master-node-01", "labels": {"node-role.kubernetes.io/master": ""}, "creationTimestamp": "2026-01-15T10:00:00Z"},
-         "status": {"conditions": [{"type": "Ready", "status": "True"}], "nodeInfo": {"kubeletVersion": "v1.30.2"}}},
-        {"metadata": {"name": "worker-node-01", "labels": {"node-role.kubernetes.io/worker": ""}, "creationTimestamp": "2026-02-20T14:30:00Z"},
-         "status": {"conditions": [{"type": "Ready", "status": "True"}], "nodeInfo": {"kubeletVersion": "v1.30.2"}}},
-        {"metadata": {"name": "worker-node-02", "labels": {"node-role.kubernetes.io/worker": ""}, "creationTimestamp": "2026-03-10T09:15:00Z"},
-         "status": {"conditions": [{"type": "Ready", "status": "True"}], "nodeInfo": {"kubeletVersion": "v1.30.2"}}},
-        {"metadata": {"name": "worker-node-03", "labels": {"node-role.kubernetes.io/worker": ""}, "creationTimestamp": "2026-04-05T16:45:00Z"},
-         "status": {"conditions": [{"type": "Ready", "status": "False"}], "nodeInfo": {"kubeletVersion": "v1.30.2"}}},
-    ]
-
-    pods = [
-        {"metadata": {"name": "kube-apiserver-master-01", "namespace": "kube-system", "creationTimestamp": "2026-01-15T10:05:00Z"},
-         "status": {"phase": "Running", "containerStatuses": [{"restartCount": 2}]}},
-        {"metadata": {"name": "kube-controller-master-01", "namespace": "kube-system", "creationTimestamp": "2026-01-15T10:05:00Z"},
-         "status": {"phase": "Running", "containerStatuses": [{"restartCount": 0}]}},
-        {"metadata": {"name": "coredns-7f8d6b5c4-abc12", "namespace": "kube-system", "creationTimestamp": "2026-01-15T10:10:00Z"},
-         "status": {"phase": "Running", "containerStatuses": [{"restartCount": 1}]}},
-        {"metadata": {"name": "nginx-deployment-6d4f8b7c9-x7k2m", "namespace": "default", "creationTimestamp": "2026-05-01T08:00:00Z"},
-         "status": {"phase": "Running", "containerStatuses": [{"restartCount": 0}]}},
-        {"metadata": {"name": "nginx-deployment-6d4f8b7c9-q9p3r", "namespace": "default", "creationTimestamp": "2026-05-01T08:00:00Z"},
-         "status": {"phase": "Running", "containerStatuses": [{"restartCount": 0}]}},
-        {"metadata": {"name": "redis-master-0", "namespace": "default", "creationTimestamp": "2026-06-15T12:00:00Z"},
-         "status": {"phase": "Running", "containerStatuses": [{"restartCount": 0}]}},
-        {"metadata": {"name": "redis-replica-0", "namespace": "default", "creationTimestamp": "2026-06-15T12:05:00Z"},
-         "status": {"phase": "Running", "containerStatuses": [{"restartCount": 0}]}},
-        {"metadata": {"name": "pending-app-pod", "namespace": "default", "creationTimestamp": "2026-08-06T10:00:00Z"},
-         "status": {"phase": "Pending", "containerStatuses": []}},
-        {"metadata": {"name": "failed-job-abc", "namespace": "batch", "creationTimestamp": "2026-08-05T22:00:00Z"},
-         "status": {"phase": "Failed", "containerStatuses": [{"restartCount": 10}]}},
-        {"metadata": {"name": "etcd-master-01", "namespace": "kube-system", "creationTimestamp": "2026-01-15T10:03:00Z"},
-         "status": {"phase": "Running", "containerStatuses": [{"restartCount": 0}]}},
-    ]
-
-    services = [
-        {"metadata": {"name": "kubernetes", "namespace": "default", "creationTimestamp": "2026-01-15T10:00:00Z"},
-         "spec": {"type": "ClusterIP", "clusterIP": "10.96.0.1", "ports": [{"port": 443, "protocol": "TCP"}]}},
-        {"metadata": {"name": "kube-dns", "namespace": "kube-system", "creationTimestamp": "2026-01-15T10:00:00Z"},
-         "spec": {"type": "ClusterIP", "clusterIP": "10.96.0.10", "ports": [{"port": 53, "protocol": "UDP"}]}},
-        {"metadata": {"name": "nginx-service", "namespace": "default", "creationTimestamp": "2026-05-01T08:05:00Z"},
-         "spec": {"type": "LoadBalancer", "clusterIP": "10.98.12.34", "ports": [{"port": 80, "protocol": "TCP"}]}},
-        {"metadata": {"name": "redis-service", "namespace": "default", "creationTimestamp": "2026-06-15T12:10:00Z"},
-         "spec": {"type": "ClusterIP", "clusterIP": "10.99.56.78", "ports": [{"port": 6379, "protocol": "TCP"}]}},
-    ]
-
-    deployments = [
-        {"metadata": {"name": "coredns", "namespace": "kube-system", "creationTimestamp": "2026-01-15T10:10:00Z"},
-         "status": {"replicas": 2, "readyReplicas": 2, "updatedReplicas": 2, "availableReplicas": 2}},
-        {"metadata": {"name": "nginx-deployment", "namespace": "default", "creationTimestamp": "2026-05-01T08:00:00Z"},
-         "status": {"replicas": 3, "readyReplicas": 3, "updatedReplicas": 3, "availableReplicas": 3}},
-        {"metadata": {"name": "redis-master", "namespace": "default", "creationTimestamp": "2026-06-15T12:00:00Z"},
-         "status": {"replicas": 1, "readyReplicas": 1, "updatedReplicas": 1, "availableReplicas": 1}},
-        {"metadata": {"name": "redis-replica", "namespace": "default", "creationTimestamp": "2026-06-15T12:05:00Z"},
-         "status": {"replicas": 1, "readyReplicas": 1, "updatedReplicas": 1, "availableReplicas": 1}},
-        {"metadata": {"name": "monitoring-agent", "namespace": "monitoring", "creationTimestamp": "2026-07-20T09:00:00Z"},
-         "status": {"replicas": 2, "readyReplicas": 1, "updatedReplicas": 2, "availableReplicas": 1}},
-    ]
-
-    return nodes, pods, services, deployments
+def demo_data():
+    nodes = [{"metadata":{"name":"master-01","labels":{"node-role.kubernetes.io/master":""},"creationTimestamp":"2026-01-15T10:00:00Z"},"status":{"conditions":[{"type":"Ready","status":"True"}],"nodeInfo":{"kubeletVersion":"v1.30.2"}}},
+             {"metadata":{"name":"worker-01","labels":{"node-role.kubernetes.io/worker":""},"creationTimestamp":"2026-02-20T14:30:00Z"},"status":{"conditions":[{"type":"Ready","status":"True"}],"nodeInfo":{"kubeletVersion":"v1.30.2"}}},
+             {"metadata":{"name":"worker-02","labels":{"node-role.kubernetes.io/worker":""},"creationTimestamp":"2026-03-10T09:15:00Z"},"status":{"conditions":[{"type":"Ready","status":"False"}],"nodeInfo":{"kubeletVersion":"v1.30.2"}}}]
+    pods = [{"metadata":{"name":"nginx-1","namespace":"default","creationTimestamp":"2026-07-01T08:00:00Z"},"status":{"phase":"Running","containerStatuses":[{"restartCount":0}]},"spec":{"nodeName":"worker-01","containers":[{"name":"nginx","securityContext":{"privileged":False,"readOnlyRootFilesystem":True,"runAsUser":1000}}]}},
+            {"metadata":{"name":"redis-0","namespace":"default","creationTimestamp":"2026-07-15T12:00:00Z"},"status":{"phase":"Running","containerStatuses":[{"restartCount":2}]},"spec":{"nodeName":"worker-01","containers":[{"name":"redis","securityContext":{"privileged":False,"readOnlyRootFilesystem":False,"runAsUser":0}}]}},
+            {"metadata":{"name":"debug-pod","namespace":"kube-system","creationTimestamp":"2026-08-01T10:00:00Z"},"status":{"phase":"Running","containerStatuses":[{"restartCount":0}]},"spec":{"nodeName":"master-01","containers":[{"name":"debug","securityContext":{"privileged":True,"runAsUser":0}}]}},
+            {"metadata":{"name":"failed-job","namespace":"batch","creationTimestamp":"2026-08-05T22:00:00Z"},"status":{"phase":"Failed","containerStatuses":[{"restartCount":10}]},"spec":{"nodeName":"worker-02","containers":[{"name":"job","securityContext":{}}]}}]
+    deps = [{"metadata":{"name":"nginx","namespace":"default","creationTimestamp":"2026-07-01T08:00:00Z"},"status":{"replicas":3,"readyReplicas":3}},
+            {"metadata":{"name":"redis","namespace":"default","creationTimestamp":"2026-07-15T12:00:00Z"},"status":{"replicas":2,"readyReplicas":1}}]
+    return nodes, pods, deps
 
 
-# ─── Main ──────────────────────────────────────────────────
-def main():
+def cmd_check(args):
     Display.banner()
+    client = KubectlClient(args.kubeconfig, args.context, args.namespace)
+    live = client.available()
+    if live: console.print("[green]Live cluster data[/green]\n")
+    else: console.print("[yellow]DEMO mode[/yellow]\n"); client = KubectlClient()
 
-    # Check for kubectl
-    try:
-        subprocess.run(["kubectl", "version", "--client"], capture_output=True, timeout=10)
-        kubectl_available = True
-    except Exception:
-        kubectl_available = False
+    sec = SecurityScanner(client).scan()
+    ra = ResourceAnalyzer(client)
+    pvcs = ra.analyze_pvcs(); quotas = ra.analyze_quotas(); netpol = ra.analyze_netpol()
 
-    if kubectl_available:
-        client = KubectlClient()
-        console.print("[green][OK] kubectl detected -- fetching live cluster data...[/green]\n")
-        nodes = client.get_nodes()
-        pods = client.get_pods()
-        services = client.get_services()
-        deployments = client.get_deployments()
-    else:
-        nodes, pods, services, deployments = generate_demo_data()
+    ha = HealthAnalyzer()
+    nodes_data = client.get_nodes() if live else demo_data()[0]
+    pods_data = client.get_pods() if live else demo_data()[1]
+    deps_data = client.get_deployments() if live else demo_data()[2]
 
-    # Analyze
-    analyzer = HealthAnalyzer()
-    node_analysis = analyzer.analyze_nodes(nodes)
-    pod_analysis = analyzer.analyze_pods(pods)
-    svc_analysis = analyzer.analyze_services(services)
-    deploy_analysis = analyzer.analyze_deployments(deployments)
+    na = ha.nodes(nodes_data); pa = ha.pods(pods_data); da = ha.deployments(deps_data)
+    avg = (na["score"]+pa["score"]+da["score"])/3
 
-    # Display
-    Display.show_nodes(nodes, node_analysis)
-    Display.show_pods(pods, pod_analysis)
-    Display.show_services(services, svc_analysis)
-    Display.show_deployments(deployments, deploy_analysis)
-    Display.show_summary(node_analysis, pod_analysis, svc_analysis, deploy_analysis)
+    Display.security(sec); console.print()
+    Display.pvcs(pvcs); console.print()
+    Display.quotas(quotas); console.print()
+    Display.netpol(netpol); console.print()
+
+    s = Table(box=box.SIMPLE, show_header=False)
+    s.add_column("K",style="bold"); s.add_column("V",justify="right")
+    s.add_row("Nodes",f"{na['ready']}/{na['total']}"); s.add_row("Pods",f"{pa['running']}/{pa['total']}")
+    s.add_row("Failed",str(pa["failed"])); s.add_row("Deployments",f"{da['healthy']}/{da['total']}")
+    s.add_row("Security",f"[red]{sum(1 for i in sec if i.severity=='CRITICAL')}[/red] crit, [yellow]{sum(1 for i in sec if i.severity=='WARNING')}[/yellow] warn")
+    s.add_row("Score",Display.bar(avg))
+    console.print(Panel(s,title="[bold]Summary[/bold]",border_style="cyan"))
+
+    recs = Recommender().generate(sec, quotas, pvcs, na, pa)
+    Display.recs(recs)
+
+    if args.output:
+        with open(args.output,"w") as f:
+            json.dump({"timestamp":datetime.now().isoformat(),"score":avg,"security":[asdict(i) for i in sec],"pvcs":[asdict(p) for p in pvcs],"quotas":[asdict(q) for q in quotas],"recommendations":recs},f,indent=2,default=str)
+        console.print(f"\n[green]Exported to {args.output}[/green]")
 
 
-if __name__ == "__main__":
-    main()
+def cmd_ns(args):
+    client = KubectlClient(args.kubeconfig, args.context)
+    data = client.get_namespaces()
+    if not data: console.print("[red]No namespaces[/red]"); return
+    t = Table(title="Namespaces",box=box.ROUNDED); t.add_column("Name",style="cyan"); t.add_column("Status",style="green")
+    for ns in data: t.add_row(ns["metadata"]["name"],ns.get("status",{}).get("phase","Unknown"))
+    console.print(t)
+
+
+def main():
+    p = argparse.ArgumentParser(description="K8s Health Monitor v3.0.0")
+    p.add_argument("--kubeconfig"); p.add_argument("--context")
+    sub = p.add_subparsers(dest="cmd")
+    cp = sub.add_parser("check"); cp.add_argument("-n","--namespace",default=""); cp.add_argument("-o","--output"); cp.set_defaults(func=cmd_check)
+    sub.add_parser("namespaces").set_defaults(func=cmd_ns)
+    args = p.parse_args()
+    if not args.command: cmd_check(args)
+    else: args.func(args)
+
+if __name__ == "__main__": main()
