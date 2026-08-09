@@ -4,20 +4,11 @@
 import subprocess
 import json
 import sys
-import os
-import time
 import argparse
-from datetime import datetime
-from typing import Optional, List, Dict, Any
-from dataclasses import dataclass, field, asdict
-from enum import Enum
-from collections import defaultdict
+from dataclasses import dataclass, asdict
 
 try:
     from rich.console import Console
-    from rich.table import Table
-    from rich.panel import Panel
-    from rich import box
 except ImportError:
     print("[!] pip install rich")
     sys.exit(1)
