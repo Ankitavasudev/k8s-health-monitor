@@ -7,4 +7,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY *.py ./
 
-CMD ["python", "k8s_monitor.py"]
+ENTRYPOINT ["python", "k8s_monitor.py"]
