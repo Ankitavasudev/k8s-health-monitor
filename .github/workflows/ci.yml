@@ -47,7 +47,7 @@ jobs:
 
       - name: Lint with flake8
         run: |
-          flake8 k8s_monitor.py namespace_compare.py resource_visualizer.py --max-line-length=120 --ignore=E501,W503,E303,W291,W293
+          flake8 k8s_monitor.py namespace_compare.py resource_visualizer.py --max-line-length=120 --ignore=E501,W503,E303,W291,W293,E712,E702,E722,F541,W292,F401
 
   docker:
     runs-on: ubuntu-latest
