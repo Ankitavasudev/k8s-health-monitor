@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """Resource usage visualizer for Kubernetes clusters."""
 
-import json
 import sys
-from typing import List, Dict
+from typing import List
 from dataclasses import dataclass
 
 try:
