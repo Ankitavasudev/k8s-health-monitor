@@ -130,6 +130,10 @@ def export_html(namespaces: List[NamespaceStats], filepath: str):
 
 
 if __name__ == "__main__":
+    # Fixed sample data: this module renders NamespaceStats objects and does not
+    # touch a cluster, so the block below is a preview of the tables and charts.
+    console.print("[dim]Sample namespaces (no cluster connection) — "
+                  "import compare_namespaces() to feed real data.[/dim]\n")
     demo = [
         NamespaceStats("default", pods=12, services=5, deployments=3, pvcs=2, network_policies=1, resource_quotas=1),
         NamespaceStats("kube-system", pods=8, services=4, deployments=2, pvcs=0, network_policies=0, resource_quotas=0),

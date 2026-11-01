@@ -371,4 +371,3 @@ def test_prometheus_output_is_pure_exposition_text():
     assert result.returncode == 0, result.stderr
     assert result.stdout.startswith("# HELP cluster_")
     assert "cluster_nodes_total" in result.stdout
-

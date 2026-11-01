@@ -39,6 +39,8 @@ except ImportError:
 console = Console()
 err_console = Console(stderr=True)
 
+VERSION = "1.1.0"
+
 
 # â”€â”€â”€ Kubectl Wrapper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 class KubectlClient:
@@ -437,7 +439,7 @@ class Display:
                               |___/
         """
         console.print(Panel(banner_text.strip(), style="bold cyan", box=box.SIMPLE))
-        console.print(f"  [dim]Kubernetes Cluster Health Monitor v3.0[/dim]")
+        console.print(f"  [dim]Kubernetes Cluster Health Monitor v{VERSION}[/dim]")
         console.print(f"  [dim]{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}[/dim]\n")
 
     @staticmethod
@@ -794,17 +796,25 @@ def generate_demo_data():
 # â”€â”€â”€ Main â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 def main():
     import argparse
+
+    # JSON, Prometheus and HTML payloads are UTF-8 documents. On Windows the
+    # default console encoding is cp1252, which cannot represent characters
+    # such as the middle dot used in the HTML report.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
     parser = argparse.ArgumentParser(description="Kubernetes Cluster Health Monitor")
     parser.add_argument("--kubeconfig", help="Path to kubeconfig file")
     parser.add_argument("--context", help="Kubernetes context to use")
     parser.add_argument("--namespace", "-n", help="Specific namespace to scan")
-    parser.add_argument("--output", choices=["text", "json", "prometheus"], default="text", help="Output format")
+    parser.add_argument("--output", choices=["text", "json", "prometheus", "html"], default="text", help="Output format")
     parser.add_argument("--exporter", action="store_true", help="Start Prometheus exporter")
     parser.add_argument("--exporter-port", type=int, default=9090, help="Prometheus exporter port")
     parser.add_argument("--security", action="store_true", default=True, help="Run security scan")
     parser.add_argument("--no-security", action="store_false", dest="security")
     parser.add_argument("--demo", action="store_true",
                         help="Use built-in sample data instead of talking to a cluster")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {VERSION}")
     args = parser.parse_args()
 
     # `--output json` and `--output prometheus` must emit only the payload, so
@@ -851,8 +861,10 @@ def main():
                 "[yellow]kubectl is not installed -- showing sample data. "
                 "Pass --demo to silence this notice.[/yellow]\n",
             )
+        used_demo = True
         nodes, pods, services, deployments, events, namespaces = generate_demo_data()
     else:
+        used_demo = False
         client = KubectlClient(kubeconfig=args.kubeconfig, context=args.context)
         console.print("[green][OK] kubectl detected -- fetching live cluster data...[/green]\n")
         nodes = client.get_nodes()
@@ -920,6 +932,44 @@ def main():
         exporter = PrometheusExporter()
         exporter.update_metrics(nodes, pods, services, deployments, security_summary, pod_resources)
         print(exporter.generate_output())
+
+    elif args.output == "html":
+        from html_report import render_html
+
+        pod_details = []
+        for pod in pods:
+            meta = pod.get("metadata", {})
+            status = pod.get("status", {})
+            restarts = sum(
+                cs.get("restartCount", 0) or 0
+                for cs in status.get("containerStatuses", [])
+            )
+            pod_details.append({
+                "namespace": meta.get("namespace", "default"),
+                "name": meta.get("name", "?"),
+                "phase": status.get("phase", "Unknown"),
+                "restarts": restarts,
+            })
+
+        report = {
+            "timestamp": datetime.now().isoformat(timespec="seconds"),
+            "nodes": node_analysis,
+            "pods": pod_analysis,
+            "services": svc_analysis,
+            "deployments": deploy_analysis,
+            "resources": pod_resources,
+            "node_resources": node_resources,
+            "events": event_analysis,
+            "security": security_summary,
+            "findings": security.findings if args.security else [],
+            "pod_details": pod_details,
+        }
+        print(render_html(
+            report,
+            mode="sample data" if used_demo else "live cluster",
+            context=args.context or "",
+            version=VERSION,
+        ))
 
 
 if __name__ == "__main__":

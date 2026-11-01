@@ -33,6 +33,24 @@ jobs:
       - name: Smoke test the demo mode
         run: python k8s_monitor.py --demo --output json > demo.json && python -c "import json;d=json.load(open('demo.json'));assert d['pods']['total'] > 0;print('demo ok')"
 
+      - name: HTML report is self-contained
+        run: |
+          python k8s_monitor.py --demo --output html > report.html
+          python - <<'PY'
+          html = open("report.html", encoding="utf-8").read()
+          assert html.startswith("<!DOCTYPE html>")
+          assert "<script" not in html.lower()
+          assert "src=" not in html.lower()
+          assert "WARNING" in html or "HEALTHY" in html
+          print("html ok", len(html), "bytes")
+          PY
+
+      - name: Package installs and exposes the console script
+        run: |
+          pip install . --quiet
+          k8s-health-monitor --version
+          k8s-health-monitor --demo --output html | head -3
+
       - name: Fail clearly when no cluster is reachable
         run: |
           set +e
@@ -55,7 +73,8 @@ jobs:
 
       - name: Lint
         run: |
-          flake8 k8s_monitor.py namespace_compare.py resource_visualizer.py \
+          flake8 k8s_monitor.py html_report.py namespace_compare.py \
+            resource_visualizer.py scripts/build_demo.py tests/ \
             --max-line-length=120 --ignore=E501,W503,E303,W291,W293,E712,E702,E722,F541,W292,F401
 
   docker:

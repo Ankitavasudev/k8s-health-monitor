@@ -9,7 +9,10 @@ python k8s_monitor.py --demo      # sample data, no cluster needed
 python k8s_monitor.py             # your current kubeconfig context
 ```
 
-![demo](https://img.shields.io/badge/demo-mode-blue) ![tests](https://img.shields.io/badge/tests-51%20passing-brightgreen)
+![demo](https://img.shields.io/badge/demo-mode-blue) ![tests](https://img.shields.io/badge/tests-60%20passing-brightgreen)
+
+**Live report:** <https://ankitavasudev.github.io/k8s-health-monitor/> — the HTML
+output of `--demo`, published straight from this repo.
 
 ## What it reports
 
@@ -50,13 +53,13 @@ node and a degraded deployment so every branch of the UI is visible.
 ## Install
 
 ```bash
-git clone https://github.com/Ankitavasudev/k8s-health-monitor
-cd k8s-health-monitor
-pip install -r requirements.txt      # rich, requests
+pip install git+https://github.com/Ankitavasudev/k8s-health-monitor@v1.1.0
+k8s-health-monitor --demo
 ```
 
 Python 3.9+. Running against a real cluster also needs `kubectl` on `PATH` and a
-kubeconfig; `--demo` needs neither.
+kubeconfig; `--demo` needs neither. From a clone: `pip install -r requirements.txt`
+and `python k8s_monitor.py`.
 
 ## Usage
 
@@ -76,6 +79,9 @@ python k8s_monitor.py --output json
 python k8s_monitor.py --output prometheus
 python k8s_monitor.py --exporter --exporter-port 9090
 
+# One-file HTML report: open it, mail it, or publish it
+python k8s_monitor.py --output html > cluster.html
+
 # Sample data when there is no cluster around
 python k8s_monitor.py --demo
 ```
@@ -89,12 +95,14 @@ an empty list, which would otherwise look like a perfectly healthy cluster.
 
 ```
 k8s_monitor.py          KubectlClient + SecurityScanner + ResourceAnalyzer
-                        + HealthAnalyzer + Display + PrometheusExporter
+                        + HealthAnalyzer + Display + PrometheusExporter + main()
+html_report.py          self-contained HTML report renderer (no scripts, no CDN)
 namespace_compare.py    Compare two namespaces side by side
 resource_visualizer.py  Rich bar charts for CPU/memory
-cli.py                  Subcommands: monitor / compare / export / benchmark
 json_export.py          JSON report writer
 benchmark.py            Fake-data timing harness
+scripts/build_demo.py   Regenerates docs/index.html from `--demo`
+docs/index.html         The published report (GitHub Pages)
 tests/                  pytest suite (no cluster required)
 ```
 
@@ -103,6 +111,7 @@ tests/                  pytest suite (no cluster required)
 ```bash
 pip install -r requirements.txt -r requirements-dev.txt
 python -m pytest -q
+python scripts/build_demo.py     # rebuild docs/index.html after changing the report
 ```
 
 The tests never touch a real cluster: every analyzer is a pure function over

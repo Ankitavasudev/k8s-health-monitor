@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kubernetes Health Report</title>
+<meta name="description" content="Kubernetes cluster health report: node, pod and deployment status, resource accounting and security findings.">
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #0d1117;
+  --panel: #161b22;
+  --panel-2: #1c2128;
+  --line: #30363d;
+  --fg: #e6edf3;
+  --muted: #8b949e;
+  --ok: #3fb950;
+  --warn: #d29922;
+  --bad: #f85149;
+  --unknown: #8b949e;
+  --accent: #58a6ff;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  padding: 32px 20px 64px;
+  background: var(--bg);
+  color: var(--fg);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+.wrap { max-width: 1080px; margin: 0 auto; }
+header { border-bottom: 1px solid var(--line); padding-bottom: 20px; margin-bottom: 28px; }
+h1 { font-size: 24px; margin: 0 0 6px; letter-spacing: -0.01em; }
+h1 .dot { color: var(--accent); }
+.meta { color: var(--muted); font-size: 13px; font-family: var(--mono); }
+h2 { font-size: 15px; text-transform: uppercase; letter-spacing: 0.08em;
+     color: var(--muted); margin: 40px 0 14px; font-weight: 600; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.card {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 16px 18px; border-left-width: 3px;
+}
+.card.ok { border-left-color: var(--ok); }
+.card.warn { border-left-color: var(--warn); }
+.card.bad { border-left-color: var(--bad); }
+.card.unknown { border-left-color: var(--unknown); }
+.card .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; }
+.card .value { font-size: 26px; font-weight: 600; font-family: var(--mono); margin: 4px 0 2px; }
+.card .status { font-size: 12px; font-family: var(--mono); }
+.ok .status { color: var(--ok); }
+.warn .status { color: var(--warn); }
+.bad .status { color: var(--bad); }
+.unknown .status { color: var(--unknown); }
+.card .detail { color: var(--muted); font-size: 12px; margin-top: 6px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+caption { text-align: left; color: var(--muted); font-size: 12px; padding-bottom: 8px; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+tbody tr:hover { background: var(--panel-2); }
+td.num, th.num { text-align: right; font-family: var(--mono); }
+code, .mono { font-family: var(--mono); font-size: 12px; }
+.chip {
+  display: inline-block; padding: 1px 8px; border-radius: 999px;
+  font-size: 11px; font-family: var(--mono); border: 1px solid currentColor;
+}
+.chip.CRITICAL, .chip.bad { color: var(--bad); }
+.chip.HIGH { color: #ff8f6b; }
+.chip.MEDIUM { color: var(--warn); }
+.chip.LOW { color: var(--muted); }
+.chip.ok { color: var(--ok); }
+.scroll { overflow-x: auto; }
+.empty { color: var(--muted); font-size: 13px; padding: 12px 0; }
+.bars { display: grid; gap: 8px; }
+.bar-row { display: grid; grid-template-columns: 90px 1fr 64px; align-items: center; gap: 10px; font-size: 13px; }
+.bar { height: 8px; border-radius: 4px; background: var(--panel-2); overflow: hidden; }
+.bar > i { display: block; height: 100%; background: var(--accent); }
+footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--line);
+         color: var(--muted); font-size: 12px; font-family: var(--mono); }
+footer a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+@media (max-width: 640px) {
+  body { padding: 20px 14px 40px; }
+  .bar-row { grid-template-columns: 70px 1fr 52px; }
+}
+@media print {
+  :root { color-scheme: light; --bg: #fff; --panel: #fff; --panel-2: #f6f8fa;
+          --fg: #1f2328; --muted: #57606a; --line: #d0d7de; }
+  body { padding: 0; }
+  tbody tr:hover { background: transparent; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>Kubernetes Health Report<span class="dot">.</span></h1>
+  <p class="meta"><span>generated 2026-11-01T15:34:18</span> <span aria-hidden="true">·</span> <span>source: sample data</span> <span aria-hidden="true">·</span> <span>v1.1.0</span></p>
+</header>
+<main>
+<section aria-labelledby="summary">
+  <h2 id="summary">Summary</h2>
+  <div class="cards"><div class="card warn"><div class="label">Nodes</div><div class="value">4</div><div class="status">WARNING</div><div class="detail">3 of 4 ready</div></div><div class="card warn"><div class="label">Pods</div><div class="value">11</div><div class="status">WARNING</div><div class="detail">9 running · 1 pending · 1 failed · 1 restart loops</div></div><div class="card warn"><div class="label">Deployments</div><div class="value">5</div><div class="status">WARNING</div><div class="detail">1 degraded of 5</div></div><div class="card ok"><div class="label">Services</div><div class="value">4</div><div class="status">HEALTHY</div><div class="detail">4 service(s)</div></div></div>
+</section>
+<section aria-labelledby="resources">
+  <h2 id="resources">Resource accounting</h2>
+  <div class="bars"><div class="bar-row"><span>limits</span><span class="bar" role="img" aria-label="7 of 11"><i style="width:63.6%"></i></span><span class="mono">7/11</span></div><div class="bar-row"><span>requests</span><span class="bar" role="img" aria-label="7 of 11"><i style="width:63.6%"></i></span><span class="mono">7/11</span></div><div class="bar-row"><span>unbounded</span><span class="bar" role="img" aria-label="4 of 11"><i style="width:36.4%"></i></span><span class="mono">4 of 11</span></div></div><div class="scroll"><table><caption>What the cluster has versus what workloads reserve</caption><thead><tr><th scope="col">Scope</th><th scope="col" class="num">CPU</th><th scope="col" class="num">Memory</th><th scope="col" class="num">Pod slots</th></tr></thead><tbody><tr><td>cluster capacity</td><td class="num">28 CPU</td><td class="num">112 GiB</td><td class="num">440 pods</td></tr><tr><td>requested by pods</td><td class="num">3.20 CPU</td><td class="num">3.25 GiB</td><td class="num">-</td></tr><tr><td>limited by pods</td><td class="num">6.70 CPU</td><td class="num">6.75 GiB</td><td class="num">-</td></tr></tbody></table></div>
+</section>
+<section aria-labelledby="security">
+  <h2 id="security">Security scan</h2>
+  <p><span class="chip CRITICAL">CRITICAL 2</span> <span class="chip HIGH">HIGH 16</span> <span class="chip MEDIUM">MEDIUM 6</span> <span class="chip LOW">LOW 11</span> </p><div class="scroll"><table><caption>Findings, worst first (showing 35 of 35)</caption><thead><tr><th scope="col">Severity</th><th scope="col">Rule</th><th scope="col">Resource</th><th scope="col">Container</th><th scope="col">What is wrong</th></tr></thead><tbody><tr><td><span class="chip CRITICAL">CRITICAL</span></td><td><code>PrivilegedContainer</code></td><td>default/debug-toolkit-7c9d1</td><td>debug</td><td>Container runs in privileged mode</td></tr><tr><td><span class="chip CRITICAL">CRITICAL</span></td><td><code>AllCapabilities</code></td><td>default/debug-toolkit-7c9d1</td><td>debug</td><td>Container has ALL capabilities</td></tr><tr><td><span class="chip HIGH">HIGH</span></td><td><code>RunAsNonRoot</code></td><td>kube-system/kube-apiserver-master-01</td><td>apiserver</td><td>Container runs as root</td></tr><tr><td><span class="chip HIGH">HIGH</span></td><td><code>RunAsNonRoot</code></td><td>kube-system/kube-controller-master-01</td><td>controller</td><td>Container runs as root</td></tr><tr><td><span class="chip HIGH">HIGH</span></td><td><code>RunAsNonRoot</code></td><td>kube-system/coredns-7f8d6b5c4-abc12</td><td>coredns</td><td>Container runs as root</td></tr><tr><td><span class="chip HIGH">HIGH</span></td><td><code>RunAsNonRoot</code></td><td>default/nginx-deployment-6d4f8b7c9-q9p3r</td><td>nginx</td><td>Container runs as root</td></tr><tr><td><span class="chip HIGH">HIGH</span></td><td><code>RunAsNonRoot</code></td><td>default/redis-master-0</td><td>redis</td><td>Container runs as root</td></tr><tr><td><span class="chip HIGH">HIGH</span></td><td><code>RunAsNonRoot</code></td><td>default/redis-replica-0</td><td>redis</td><td>Container runs as root</td></tr><tr><td><span class="chip HIGH">HIGH</span></td><td><code>RunAsNonRoot</code></td><td>default/pending-app-pod</td><td>app</td><td>Container runs as root</td></tr><tr><td><span class="chip HIGH">HIGH</span></td><td><code>RunAsNonRoot</code></td><td>batch/failed-job-abc</td><td>job</td><td>Container runs as root</td></tr><tr><td><span class="chip HIGH">HIGH</span></td><td><code>RunAsNonRoot</code></td><td>default/debug-toolkit-7c9d1</td><td>debug</td><td>Container runs as root</td></tr><tr><td><span class="chip HIGH">HIGH</span></td><td><code>HostNetwork</code></td><td>default/debug-toolkit-7c9d1</td><td>-</td><td>Pod uses host network</td></tr><tr><td><span class="chip HIGH">HIGH</span></td><td><code>RunAsNonRoot</code></td><td>kube-system/etcd-master-01</td><td>etcd</td><td>Container runs as root</td></tr><tr><td><span class="chip HIGH">HIGH</span></td><td><code>DeploymentRunAsRoot</code></td><td>kube-system/coredns</td><td>coredns</td><td>Deployment runs as root</td></tr><tr><td><span class="chip HIGH">HIGH</span></td><td><code>DeploymentRunAsRoot</code></td><td>default/nginx-deployment</td><td>nginx</td><td>Deployment runs as root</td></tr><tr><td><span class="chip HIGH">HIGH</span></td><td><code>DeploymentRunAsRoot</code></td><td>default/redis-master</td><td>redis</td><td>Deployment runs as root</td></tr><tr><td><span class="chip HIGH">HIGH</span></td><td><code>DeploymentRunAsRoot</code></td><td>default/redis-replica</td><td>redis</td><td>Deployment runs as root</td></tr><tr><td><span class="chip HIGH">HIGH</span></td><td><code>DeploymentRunAsRoot</code></td><td>monitoring/monitoring-agent</td><td>monitor</td><td>Deployment runs as root</td></tr><tr><td><span class="chip MEDIUM">MEDIUM</span></td><td><code>NoResourceLimits</code></td><td>default/nginx-deployment-6d4f8b7c9-q9p3r</td><td>nginx</td><td>No resource limits defined</td></tr><tr><td><span class="chip MEDIUM">MEDIUM</span></td><td><code>NoResourceLimits</code></td><td>default/pending-app-pod</td><td>app</td><td>No resource limits defined</td></tr><tr><td><span class="chip MEDIUM">MEDIUM</span></td><td><code>NoResourceLimits</code></td><td>batch/failed-job-abc</td><td>job</td><td>No resource limits defined</td></tr><tr><td><span class="chip MEDIUM">MEDIUM</span></td><td><code>NoResourceLimits</code></td><td>default/debug-toolkit-7c9d1</td><td>debug</td><td>No resource limits defined</td></tr><tr><td><span class="chip MEDIUM">MEDIUM</span></td><td><code>NoPodSecurity</code></td><td>namespace/default</td><td>-</td><td>Namespace has no pod security policy</td></tr><tr><td><span class="chip MEDIUM">MEDIUM</span></td><td><code>NoPodSecurity</code></td><td>namespace/monitoring</td><td>-</td><td>Namespace has no pod security policy</td></tr><tr><td><span class="chip LOW">LOW</span></td><td><code>WritableRootFS</code></td><td>kube-system/kube-apiserver-master-01</td><td>apiserver</td><td>Root filesystem is writable</td></tr><tr><td><span class="chip LOW">LOW</span></td><td><code>WritableRootFS</code></td><td>kube-system/kube-controller-master-01</td><td>controller</td><td>Root filesystem is writable</td></tr><tr><td><span class="chip LOW">LOW</span></td><td><code>WritableRootFS</code></td><td>kube-system/coredns-7f8d6b5c4-abc12</td><td>coredns</td><td>Root filesystem is writable</td></tr><tr><td><span class="chip LOW">LOW</span></td><td><code>WritableRootFS</code></td><td>default/nginx-deployment-6d4f8b7c9-q9p3r</td><td>nginx</td><td>Root filesystem is writable</td></tr><tr><td><span class="chip LOW">LOW</span></td><td><code>WritableRootFS</code></td><td>default/redis-master-0</td><td>redis</td><td>Root filesystem is writable</td></tr><tr><td><span class="chip LOW">LOW</span></td><td><code>WritableRootFS</code></td><td>default/redis-replica-0</td><td>redis</td><td>Root filesystem is writable</td></tr><tr><td><span class="chip LOW">LOW</span></td><td><code>WritableRootFS</code></td><td>default/pending-app-pod</td><td>app</td><td>Root filesystem is writable</td></tr><tr><td><span class="chip LOW">LOW</span></td><td><code>WritableRootFS</code></td><td>batch/failed-job-abc</td><td>job</td><td>Root filesystem is writable</td></tr><tr><td><span class="chip LOW">LOW</span></td><td><code>WritableRootFS</code></td><td>default/debug-toolkit-7c9d1</td><td>debug</td><td>Root filesystem is writable</td></tr><tr><td><span class="chip LOW">LOW</span></td><td><code>WritableRootFS</code></td><td>kube-system/etcd-master-01</td><td>etcd</td><td>Root filesystem is writable</td></tr><tr><td><span class="chip LOW">LOW</span></td><td><code>LoadBalancerExposure</code></td><td>default/nginx-service</td><td>-</td><td>Service exposed via LoadBalancer</td></tr></tbody></table></div>
+</section>
+<section aria-labelledby="events">
+  <h2 id="events">Warning events</h2>
+  <div class="scroll"><table><caption>2 warning event(s) in the last hour</caption><thead><tr><th scope="col">Reason</th><th scope="col">Object</th><th scope="col">Message</th></tr></thead><tbody><tr><td><code>BackOff</code></td><td>default/failed-job-abc</td><td>Back-off restarting failed container</td></tr><tr><td><code>Unhealthy</code></td><td>monitoring/monitoring-agent</td><td>Readiness probe failed</td></tr></tbody></table></div>
+</section>
+<section aria-labelledby="pods">
+  <h2 id="pods">Pods</h2>
+  <div class="scroll"><table><caption>Workloads as reported by the API server</caption><thead><tr><th scope="col">Namespace</th><th scope="col">Pod</th><th scope="col">Phase</th><th scope="col" class="num">Restarts</th></tr></thead><tbody><tr><td>kube-system</td><td><code>kube-apiserver-master-01</code></td><td><span class="chip ok">Running</span></td><td class="num">2</td></tr><tr><td>kube-system</td><td><code>kube-controller-master-01</code></td><td><span class="chip ok">Running</span></td><td class="num">0</td></tr><tr><td>kube-system</td><td><code>coredns-7f8d6b5c4-abc12</code></td><td><span class="chip ok">Running</span></td><td class="num">1</td></tr><tr><td>default</td><td><code>nginx-deployment-6d4f8b7c9-x7k2m</code></td><td><span class="chip ok">Running</span></td><td class="num">0</td></tr><tr><td>default</td><td><code>nginx-deployment-6d4f8b7c9-q9p3r</code></td><td><span class="chip ok">Running</span></td><td class="num">0</td></tr><tr><td>default</td><td><code>redis-master-0</code></td><td><span class="chip ok">Running</span></td><td class="num">0</td></tr><tr><td>default</td><td><code>redis-replica-0</code></td><td><span class="chip ok">Running</span></td><td class="num">0</td></tr><tr><td>default</td><td><code>pending-app-pod</code></td><td><span class="chip MEDIUM">Pending</span></td><td class="num">0</td></tr><tr><td>batch</td><td><code>failed-job-abc</code></td><td><span class="chip bad">Failed</span></td><td class="num"><span class="chip bad">10</span></td></tr><tr><td>default</td><td><code>debug-toolkit-7c9d1</code></td><td><span class="chip ok">Running</span></td><td class="num">0</td></tr><tr><td>kube-system</td><td><code>etcd-master-01</code></td><td><span class="chip ok">Running</span></td><td class="num">0</td></tr></tbody></table></div>
+</section>
+</main>
+<footer>
+  Generated by <a href="https://github.com/Ankitavasudev/k8s-health-monitor">k8s-health-monitor</a>
+  v1.1.0 — one file, no scripts, no network requests.
+</footer>
+</div>
+</body>
+</html>
+

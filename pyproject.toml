@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "k8s-health-monitor"
+version = "1.1.0"
+description = "Kubernetes cluster health report for the terminal and the browser: node/pod/deployment status, resource accounting and security findings"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { file = "LICENSE" }
+authors = [{ name = "Ankita Salaria" }]
+keywords = ["kubernetes", "health-check", "observability", "kubectl", "cli", "security"]
+classifiers = [
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: System :: Systems Administration",
+]
+dependencies = [
+    "rich>=13.0.0",
+    "requests>=2.31.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/Ankitavasudev/k8s-health-monitor"
+Issues = "https://github.com/Ankitavasudev/k8s-health-monitor/issues"
+Changelog = "https://github.com/Ankitavasudev/k8s-health-monitor/releases"
+
+[project.scripts]
+k8s-health-monitor = "k8s_monitor:main"
+
+[tool.setuptools]
+py-modules = [
+    "k8s_monitor",
+    "html_report",
+    "namespace_compare",
+    "resource_visualizer",
+    "prometheus_exporter",
+    "json_export",
+    "summary",
+]
