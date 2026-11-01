@@ -47,10 +47,20 @@ Rule names are stable; severities are what the scanner assigns.
 Demo mode intentionally includes one privileged pod, one pending pod, a failing
 node and a degraded deployment so every branch of the UI is visible.
 
+## Install
+
+```bash
+git clone https://github.com/Ankitavasudev/k8s-health-monitor
+cd k8s-health-monitor
+pip install -r requirements.txt      # rich, requests
+```
+
+Python 3.9+. Running against a real cluster also needs `kubectl` on `PATH` and a
+kubeconfig; `--demo` needs neither.
+
 ## Usage
 
 ```bash
-pip install -r requirements.txt
 
 # Full scan against the current context
 python k8s_monitor.py
