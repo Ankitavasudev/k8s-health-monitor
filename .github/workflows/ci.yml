@@ -10,25 +10,35 @@ jobs:
   test:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         python-version: ["3.9", "3.10", "3.11", "3.12"]
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements.txt -r requirements-dev.txt
 
       - name: Run tests
+        run: python -m pytest tests/ -q
+
+      - name: Smoke test the demo mode
+        run: python k8s_monitor.py --demo --output json > demo.json && python -c "import json;d=json.load(open('demo.json'));assert d['pods']['total'] > 0;print('demo ok')"
+
+      - name: Fail clearly when no cluster is reachable
         run: |
-          python -m pytest tests/ -v --tb=short
+          set +e
+          python k8s_monitor.py --kubeconfig /nonexistent > /dev/null 2>&1
+          code=$?
+          test "$code" -eq 2 && echo "exit code 2 as expected"
 
   lint:
     runs-on: ubuntu-latest
@@ -40,24 +50,21 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install flake8
+      - name: Install flake8
+        run: pip install flake8
 
-      - name: Lint with flake8
+      - name: Lint
         run: |
-          flake8 k8s_monitor.py namespace_compare.py resource_visualizer.py --max-line-length=120 --ignore=E501,W503,E303,W291,W293,E712,E702,E722,F541,W292,F401
+          flake8 k8s_monitor.py namespace_compare.py resource_visualizer.py \
+            --max-line-length=120 --ignore=E501,W503,E303,W291,W293,E712,E702,E722,F541,W292,F401
 
   docker:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build Docker image
-        run: |
-          docker build -t k8s-health-monitor:latest .
+      - name: Build image
+        run: docker build -t k8s-health-monitor:latest .
 
-      - name: Test Docker image
-        run: |
-          docker run --rm k8s-health-monitor:latest --help
+      - name: Run the demo from inside the image
+        run: docker run --rm k8s-health-monitor:latest --demo --output json > /dev/null

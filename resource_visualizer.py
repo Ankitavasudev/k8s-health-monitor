@@ -108,8 +108,8 @@ def visualize_resources(resources: List[ResourceUsage]):
     summary.add_column("Value")
     summary.add_row("Total CPU Requests", f"{total_cpu_req}m / {total_cpu_lim}m")
     summary.add_row("Total Memory Requests", f"{total_mem_req}Mi / {total_mem_lim}Mi")
-    summary.add_row("CPU Utilization", f"{total_cpu_req/total_cpu_lim*100:.1f}%" if total_cpu_lim > 0 else "N/A")
-    summary.add_row("Memory Utilization", f"{total_mem_req/total_mem_lim*100:.1f}%" if total_mem_lim > 0 else "N/A")
+    summary.add_row("CPU Utilization", f"{total_cpu_req / total_cpu_lim * 100:.1f}%" if total_cpu_lim > 0 else "N/A")
+    summary.add_row("Memory Utilization", f"{total_mem_req / total_mem_lim * 100:.1f}%" if total_mem_lim > 0 else "N/A")
     console.print(Panel(summary, title="Cluster Resource Summary", border_style="cyan"))
 
 

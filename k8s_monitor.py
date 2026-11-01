@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
 K8s Health Monitor - Advanced Kubernetes Cluster Health Checker
 Features: Security scanning, resource analysis, Prometheus export, rich CLI
@@ -37,9 +37,10 @@ except ImportError:
     from rich import box
 
 console = Console()
+err_console = Console(stderr=True)
 
 
-# â”€â”€â”€ Kubectl Wrapper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Kubectl Wrapper Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 class KubectlClient:
     def __init__(self, kubeconfig: Optional[str] = None, context: Optional[str] = None):
         self.kubeconfig = kubeconfig
@@ -117,7 +118,7 @@ class KubectlClient:
         return data.get("items", []) if data else []
 
 
-# â”€â”€â”€ Security Scanner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Security Scanner Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 class SecurityScanner:
     """Scans Kubernetes resources for security misconfigurations."""
 
@@ -259,7 +260,7 @@ class SecurityScanner:
         return summary
 
 
-# â”€â”€â”€ Resource Analyzer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Resource Analyzer Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 class ResourceAnalyzer:
     """Analyzes resource usage and quotas across the cluster."""
 
@@ -332,7 +333,7 @@ class ResourceAnalyzer:
         return float(mem_str)
 
 
-# â”€â”€â”€ Health Analyzer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Health Analyzer Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 class HealthAnalyzer:
     def analyze_nodes(self, nodes: list) -> dict:
         total = len(nodes)
@@ -341,6 +342,8 @@ class HealthAnalyzer:
             for c in n.get("status", {}).get("conditions", [])
         ))
         not_ready = total - ready
+        if total == 0:
+            return {"total": 0, "ready": 0, "not_ready": 0, "status": "UNKNOWN"}
         return {
             "total": total,
             "ready": ready,
@@ -360,6 +363,12 @@ class HealthAnalyzer:
             for cs in p.get("status", {}).get("containerStatuses", []):
                 if cs.get("restartCount", 0) > 5:
                     restart_loops += 1
+        if total == 0:
+            return {
+                "total": 0, "running": 0, "pending": 0, "failed": 0,
+                "succeeded": 0, "unknown": 0, "restart_loops": 0,
+                "status": "UNKNOWN",
+            }
         return {
             "total": total,
             "running": running,
@@ -372,6 +381,8 @@ class HealthAnalyzer:
         }
 
     def analyze_services(self, services: list) -> dict:
+        if not services:
+            return {"total": 0, "status": "UNKNOWN"}
         return {"total": len(services), "status": "HEALTHY"}
 
     def analyze_deployments(self, deployments: list) -> dict:
@@ -386,6 +397,8 @@ class HealthAnalyzer:
                 healthy += 1
             else:
                 degraded += 1
+        if total == 0:
+            return {"total": 0, "healthy": 0, "degraded": 0, "status": "UNKNOWN"}
         return {
             "total": total,
             "healthy": healthy,
@@ -409,7 +422,7 @@ class HealthAnalyzer:
         }
 
 
-# â”€â”€â”€ Display â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Display Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 class Display:
     @staticmethod
     def banner():
@@ -540,7 +553,7 @@ class Display:
         console.print(f"  Critical: {summary['CRITICAL']} | High: {summary['HIGH']} | Medium: {summary['MEDIUM']} | Low: {summary['LOW']}\n")
 
     @staticmethod
-    def show_resources(resource_analysis):
+    def show_resources(resource_analysis, node_capacity=None):
         table = Table(title="Resource Analysis", box=box.ROUNDED, show_lines=True)
         table.add_column("Metric", style="cyan")
         table.add_column("Value", style="green", justify="right")
@@ -552,6 +565,16 @@ class Display:
         table.add_row("CPU Limits", f"{resource_analysis['total_cpu_limits']:.2f} cores")
         table.add_row("Memory Requests", _format_bytes(resource_analysis["total_mem_requests"]))
         table.add_row("Memory Limits", _format_bytes(resource_analysis["total_mem_limits"]))
+
+        if node_capacity and node_capacity.get("total"):
+            cpu_total = node_capacity["cpu_capacity"]
+            mem_total = node_capacity["memory_capacity"]
+            cpu_pct = resource_analysis["total_cpu_requests"] / cpu_total * 100 if cpu_total else 0
+            mem_pct = resource_analysis["total_mem_requests"] / mem_total * 100 if mem_total else 0
+            table.add_row("CPU Capacity", f"{cpu_total:.2f} cores ({cpu_pct:.1f}% requested)")
+            table.add_row("Memory Capacity", f"{_format_bytes(mem_total)} ({mem_pct:.1f}% requested)")
+            table.add_row("Pod Slots", str(node_capacity["pods_capacity"]))
+
         console.print(table)
         console.print()
 
@@ -574,6 +597,8 @@ class Display:
             overall = "CRITICAL"
         elif "WARNING" in statuses or security_summary.get("HIGH", 0) > 0:
             overall = "WARNING"
+        elif all(status == "UNKNOWN" for status in statuses):
+            overall = "UNKNOWN"
         else:
             overall = "HEALTHY"
         summary = Table(box=box.SIMPLE, show_header=False, padding=(0, 2))
@@ -593,7 +618,7 @@ class Display:
         console.print(Panel(summary, title="[bold]Cluster Health Summary[/bold]", border_style="cyan"))
 
 
-# â”€â”€â”€ Prometheus Exporter â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Prometheus Exporter Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 class PrometheusExporter:
     """Exposes cluster metrics in Prometheus format via HTTP."""
 
@@ -638,7 +663,7 @@ class PrometheusExporter:
         return "\n".join(lines)
 
 
-# â”€â”€â”€ Utilities â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Utilities Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 def _get_age(timestamp: str) -> str:
     if not timestamp:
         return "unknown"
@@ -670,9 +695,8 @@ def _format_bytes(b: float) -> str:
     return f"{b:.1f} PB"
 
 
-# â”€â”€â”€ Demo Mode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Demo Mode Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 def generate_demo_data():
-    console.print("[yellow]kubectl not found -- running in DEMO mode with sample data[/yellow]\n")
     nodes = [
         {"metadata": {"name": "master-node-01", "labels": {"node-role.kubernetes.io/master": ""}, "creationTimestamp": "2026-01-15T10:00:00Z"},
          "status": {"conditions": [{"type": "Ready", "status": "True"}], "nodeInfo": {"kubeletVersion": "v1.30.2"}, "allocatable": {"cpu": "4000m", "memory": "16384Mi", "pods": "110"}}},
@@ -699,7 +723,7 @@ def generate_demo_data():
          "spec": {"securityContext": {"runAsNonRoot": True}, "containers": [{"name": "nginx", "securityContext": {"readOnlyRootFilesystem": True}, "resources": {"limits": {"cpu": "200m", "memory": "256Mi"}, "requests": {"cpu": "100m", "memory": "128Mi"}}}]}},
         {"metadata": {"name": "nginx-deployment-6d4f8b7c9-q9p3r", "namespace": "default", "creationTimestamp": "2026-05-01T08:00:00Z"},
          "status": {"phase": "Running", "containerStatuses": [{"restartCount": 0}]},
-         "spec": {"containers": [{"name": "nginx", "resources": {}, "securityContext": {}}}]}},
+         "spec": {"containers": [{"name": "nginx", "resources": {}, "securityContext": {}}]}},
         {"metadata": {"name": "redis-master-0", "namespace": "default", "creationTimestamp": "2026-06-15T12:00:00Z"},
          "status": {"phase": "Running", "containerStatuses": [{"restartCount": 0}]},
          "spec": {"containers": [{"name": "redis", "resources": {"limits": {"cpu": "500m", "memory": "512Mi"}, "requests": {"cpu": "250m", "memory": "256Mi"}}}]}},
@@ -712,6 +736,12 @@ def generate_demo_data():
         {"metadata": {"name": "failed-job-abc", "namespace": "batch", "creationTimestamp": "2026-08-05T22:00:00Z"},
          "status": {"phase": "Failed", "containerStatuses": [{"restartCount": 10}]},
          "spec": {"containers": [{"name": "job", "resources": {}}]}},
+        {"metadata": {"name": "debug-toolkit-7c9d1", "namespace": "default", "creationTimestamp": "2026-08-06T09:30:00Z"},
+         "status": {"phase": "Running", "containerStatuses": [{"restartCount": 0}]},
+         "spec": {"hostNetwork": True,
+                  "containers": [{"name": "debug", "resources": {},
+                                  "securityContext": {"privileged": True,
+                                                      "capabilities": {"add": ["ALL"]}}}]}},
         {"metadata": {"name": "etcd-master-01", "namespace": "kube-system", "creationTimestamp": "2026-01-15T10:03:00Z"},
          "status": {"phase": "Running", "containerStatuses": [{"restartCount": 0}]},
          "spec": {"containers": [{"name": "etcd", "resources": {"limits": {"cpu": "2000m", "memory": "2Gi"}, "requests": {"cpu": "1000m", "memory": "1Gi"}}}]}},
@@ -761,10 +791,8 @@ def generate_demo_data():
     return nodes, pods, services, deployments, events, namespaces
 
 
-# â”€â”€â”€ Main â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Main Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 def main():
-    Display.banner()
-
     import argparse
     parser = argparse.ArgumentParser(description="Kubernetes Cluster Health Monitor")
     parser.add_argument("--kubeconfig", help="Path to kubeconfig file")
@@ -775,9 +803,18 @@ def main():
     parser.add_argument("--exporter-port", type=int, default=9090, help="Prometheus exporter port")
     parser.add_argument("--security", action="store_true", default=True, help="Run security scan")
     parser.add_argument("--no-security", action="store_false", dest="security")
+    parser.add_argument("--demo", action="store_true",
+                        help="Use built-in sample data instead of talking to a cluster")
     args = parser.parse_args()
 
+    # `--output json` and `--output prometheus` must emit only the payload, so
+    # they are piped straight into jq / a scraper. Tables are text mode only.
+    show_tables = args.output == "text"
+    if show_tables and not args.exporter:
+        Display.banner()
+
     if args.exporter:
+        Display.banner()
         try:
             from http.server import HTTPServer, BaseHTTPRequestHandler
             console.print(f"[bold green]Starting Prometheus exporter on port {args.exporter_port}[/bold green]")
@@ -808,7 +845,12 @@ def main():
     except Exception:
         kubectl_available = False
 
-    if kubectl_available:
+    if args.demo or not kubectl_available:
+        if not args.demo:
+            err_console.print("[yellow]kubectl is not installed -- showing sample data. "
+                          "Pass --demo to silence this notice.[/yellow]\n")
+        nodes, pods, services, deployments, events, namespaces = generate_demo_data()
+    else:
         client = KubectlClient(kubeconfig=args.kubeconfig, context=args.context)
         console.print("[green][OK] kubectl detected -- fetching live cluster data...[/green]\n")
         nodes = client.get_nodes()
@@ -817,8 +859,15 @@ def main():
         deployments = client.get_deployments(args.namespace or "")
         events = client.get_events()
         namespaces = client.get_namespaces()
-    else:
-        nodes, pods, services, deployments, events, namespaces = generate_demo_data()
+
+        # An unreachable cluster looks exactly like an empty one in the JSON
+        # output, so check explicitly instead of reporting a false HEALTHY.
+        if not nodes and client.get_cluster_info() is None:
+            err_console.print(
+                "[bold red]Could not read from the cluster.[/bold red]\n"
+                "Check your kubeconfig/context, or run with [bold]--demo[/bold] to see sample output."
+            )
+            return 2
 
     analyzer = HealthAnalyzer()
     node_analysis = analyzer.analyze_nodes(nodes)
@@ -827,16 +876,9 @@ def main():
     deploy_analysis = analyzer.analyze_deployments(deployments)
     event_analysis = analyzer.analyze_events(events)
 
-    Display.show_nodes(nodes, node_analysis)
-    Display.show_pods(pods, pod_analysis)
-    Display.show_services(services, svc_analysis)
-    Display.show_deployments(deployments, deploy_analysis)
-    Display.show_events(event_analysis)
-
     resource_analyzer = ResourceAnalyzer()
     node_resources = resource_analyzer.analyze_nodes(nodes)
     pod_resources = resource_analyzer.analyze_pod_resources(pods)
-    Display.show_resources(pod_resources)
 
     if args.security:
         security = SecurityScanner()
@@ -845,11 +887,19 @@ def main():
         security.scan_namespaces(namespaces)
         security.scan_services(services)
         security_summary = security.get_summary()
-        Display.show_security(security.findings, security_summary)
     else:
         security_summary = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}
 
-    Display.show_summary(node_analysis, pod_analysis, svc_analysis, deploy_analysis, security_summary, event_analysis)
+    if show_tables:
+        Display.show_nodes(nodes, node_analysis)
+        Display.show_pods(pods, pod_analysis)
+        Display.show_services(services, svc_analysis)
+        Display.show_deployments(deployments, deploy_analysis)
+        Display.show_events(event_analysis)
+        Display.show_resources(pod_resources, node_resources)
+        if args.security:
+            Display.show_security(security.findings, security_summary)
+        Display.show_summary(node_analysis, pod_analysis, svc_analysis, deploy_analysis, security_summary, event_analysis)
 
     if args.output == "json":
         result = {
@@ -871,4 +921,5 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main() or 0)
+
