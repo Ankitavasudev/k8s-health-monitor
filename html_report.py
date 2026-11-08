@@ -103,7 +103,40 @@ footer a { color: var(--accent); text-decoration: underline; text-underline-offs
   body { padding: 0; }
   tbody tr:hover { background: transparent; }
 }
+/* --- interactivity (pure CSS, no scripts) --- */
+.bar > i { animation: grow 1.1s cubic-bezier(.2,.7,.2,1); transform-origin: left; }
+@keyframes grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.card { transition: transform .18s ease, border-color .18s ease; }
+.card:hover { transform: translateY(-3px); border-color: var(--accent); }
+details.section { margin: 0; }
+details.section > summary {
+  list-style: none; cursor: pointer; display: flex; align-items: center; gap: 10px;
+  user-select: none; margin: 40px 0 14px;
+}
+details.section > summary::before {
+  content: "▸"; color: var(--accent); font-size: 12px; transition: transform .2s ease;
+  display: inline-block;
+}
+details.section[open] > summary::before { transform: rotate(90deg); }
+details.section > summary h2 { margin: 0; }
+details.section > summary::-webkit-details-marker { display: none; }
+.findings { margin: 0; }
+.findings > input { position: absolute; opacity: 0; pointer-events: none; }
+.findings > label {
+  cursor: pointer; display: inline-block; padding: 3px 10px; border-radius: 999px;
+  font-size: 11px; border: 1px solid var(--line); color: var(--muted);
+  font-family: var(--mono); margin: 0 6px 8px 0;
+  transition: color .15s, border-color .15s, background .15s;
+}
+.findings > label:hover { color: var(--fg); }
+.findings > input:checked + label { color: var(--accent); border-color: var(--accent); background: rgba(88,166,255,.12); }
+.sev-all:checked ~ .scroll tr[data-sev],
+.sev-critical:checked ~ .scroll tr[data-sev]:not([data-sev="CRITICAL"]),
+.sev-high:checked ~ .scroll tr[data-sev]:not([data-sev="HIGH"]),
+.sev-medium:checked ~ .scroll tr[data-sev]:not([data-sev="MEDIUM"]),
+.sev-low:checked ~ .scroll tr[data-sev]:not([data-sev="LOW"]) { display: none; }
 """
+
 
 
 def _num(value: Any) -> str:
@@ -203,11 +236,7 @@ def _resource_section(report: Dict[str, Any]) -> str:
 def _security_section(report: Dict[str, Any]) -> str:
     summary = report.get("security", {}) or {}
     findings = report.get("findings", []) or []
-    chips = "".join(
-        '<span class="chip %s">%s %d</span> ' % (sev, escape(sev), summary.get(sev, 0) or 0)
-        for sev in SEVERITY_ORDER if summary.get(sev)
-    )
-    if not chips and not findings:
+    if not any(summary.values()) and not findings:
         return '<p class="empty">Security scan disabled for this run.</p>'
 
     ordered = sorted(
@@ -215,22 +244,50 @@ def _security_section(report: Dict[str, Any]) -> str:
         key=lambda f: (SEVERITY_ORDER.index(f.get("severity", "LOW"))
                        if f.get("severity") in SEVERITY_ORDER else 99),
     )
+
+    # Radio inputs double as severity filter chips (pure CSS, no scripts).
+    # The .scroll table is a sibling of the radios; ~ selectors toggle rows.
+    radios = ['<input type="radio" class="sev-all" id="sev-all" name="sev" checked>'
+              '<label for="sev-all">ALL</label>']
+    for sev in SEVERITY_ORDER:
+        n = summary.get(sev, 0) or 0
+        if n:
+            radios.append(
+                '<input type="radio" class="sev-%s" id="sev-%s" name="sev">'
+                '<label for="sev-%s">%s %d</label>' % (sev.lower(), sev.lower(), sev.lower(), sev, n)
+            )
+
     rows = []
     for f in ordered[:60]:
+        sev = f.get("severity", "LOW")
         rows.append([
-            '<span class="chip %s">%s</span>' % (
-                escape(f.get("severity", "LOW")), escape(f.get("severity", "LOW"))),
+            '<tr data-sev="%s">' % escape(sev),
+            '<span class="chip %s">%s</span>' % (escape(sev), escape(sev)),
             "<code>%s</code>" % escape(f.get("rule", "")),
             escape(f.get("resource", "")),
             escape(f.get("container", "-") or "-"),
             escape(f.get("message", "")),
+            "</tr>",
         ])
-    table = _table(
-        "Findings, worst first (showing %d of %d)" % (len(rows), len(findings)),
-        ["Severity", "Rule", "Resource", "Container", "What is wrong"],
-        rows, empty="No findings — every scanned resource passed.",
+    head = (
+        '<thead><tr><th scope="col">Severity</th><th scope="col">Rule</th>'
+        '<th scope="col">Resource</th><th scope="col">Container</th>'
+        '<th scope="col">What is wrong</th></tr></thead>'
     )
-    return '<p>%s</p>%s' % (chips, table)
+    body_rows = []
+    for r in rows:
+        body_rows.append(
+            r[0] + "<td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>" %
+            (r[1], r[2], r[3], r[4], r[5])
+        )
+    table = (
+        '<div class="scroll"><table><caption>Findings, worst first (showing %d of %d)</caption>'
+        '%s<tbody>%s</tbody></table></div>'
+        % (len(rows), len(findings), head, "".join(body_rows))
+    )
+    if not findings:
+        table = '<p class="empty">No findings — every scanned resource passed.</p>'
+    return '<div class="findings">%s%s</div>' % ("".join(radios), table)
 
 
 def _events_section(report: Dict[str, Any]) -> str:
@@ -323,26 +380,26 @@ def render_html(report: Dict[str, Any], mode: str = "live",
   <p class="meta">%s</p>
 </header>
 <main>
-<section aria-labelledby="summary">
-  <h2 id="summary">Summary</h2>
+<details class="section" open>
+  <summary><h2 id="summary">Summary</h2></summary>
   <div class="cards">%s</div>
-</section>
-<section aria-labelledby="resources">
-  <h2 id="resources">Resource accounting</h2>
+</details>
+<details class="section" open>
+  <summary><h2 id="resources">Resource accounting</h2></summary>
   %s
-</section>
-<section aria-labelledby="security">
-  <h2 id="security">Security scan</h2>
+</details>
+<details class="section" open>
+  <summary><h2 id="security">Security scan</h2></summary>
   %s
-</section>
-<section aria-labelledby="events">
-  <h2 id="events">Warning events</h2>
+</details>
+<details class="section" open>
+  <summary><h2 id="events">Warning events</h2></summary>
   %s
-</section>
-<section aria-labelledby="pods">
-  <h2 id="pods">Pods</h2>
+</details>
+<details class="section">
+  <summary><h2 id="pods">Pods</h2></summary>
   %s
-</section>
+</details>
 </main>
 <footer>
   Generated by <a href="https://github.com/Ankitavasudev/k8s-health-monitor">k8s-health-monitor</a>
